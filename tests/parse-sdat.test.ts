@@ -8,12 +8,9 @@ function parseFixture(name: string) {
 }
 
 describe("parseSdat", () => {
-  // the new ids from 2023 on (26256, 26257) map to the same directions as the old ones
   const varianten: [string, Richtung][] = [
     ["ID742", "bezug"],
     ["ID735", "einspeisung"],
-    ["ID26256", "bezug"],
-    ["ID26257", "einspeisung"],
   ];
 
   it.each(varianten)("%s wird als %s gelesen", (id, richtung) => {
@@ -55,13 +52,17 @@ describe("parseSdat", () => {
     expect(result.fehler.meldung).toContain("Ungültiges XML");
   });
 
-  it("ID26263 ohne 15-Minuten-Auflösung ergibt Fehler", () => {
-    const result = parseFixture("sdat-ID26263.xml");
+  // the client only wants ID742 and ID735
+  it.each(["ID26256", "ID26257", "ID26263"])(
+    "%s ist nicht Teil des Auftrags",
+    (id) => {
+      const result = parseFixture(`sdat-${id}.xml`);
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.fehler.meldung).toContain("15-Minuten");
-  });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.fehler.meldung).toContain("nicht Teil des Auftrags");
+    },
+  );
 
   it("ESL-Datei ist keine SDAT-Datei", () => {
     const result = parseFixture("esl-2019-01.xml");

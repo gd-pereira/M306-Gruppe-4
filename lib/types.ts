@@ -1,4 +1,6 @@
-export type SensorId = "ID742" | "ID735" | "ID26256" | "ID26257";
+// the client only wants these two sensors, all others are out of scope
+export const SENSOREN = ["ID742", "ID735"] as const;
+export type SensorId = (typeof SENSOREN)[number];
 
 // bezug = power from the grid, einspeisung = solar power fed into the grid
 export type Richtung = "bezug" | "einspeisung";

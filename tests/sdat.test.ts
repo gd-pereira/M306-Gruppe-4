@@ -1,10 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { SensorId } from "@/lib/types";
-
 // checks the fixture files themselves, not the parser
 
-const sensorIds: SensorId[] = ["ID742", "ID735", "ID26256", "ID26257"];
+const sensorIds = ["ID742", "ID735", "ID26256", "ID26257"];
 
 function readFixture(name: string): string {
   return readFileSync(`tests/fixtures/${name}`, "utf-8");
