@@ -43,7 +43,7 @@ next-env.d.ts
 # projekt
 .cursor/
 
-# agent files
+# agent 
 AGENTS.md
 CLAUDE.md
 .claude/
