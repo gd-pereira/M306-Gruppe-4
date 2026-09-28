@@ -1,4 +1,5 @@
 import { SDAT_ROOT_PREFIX } from "@/lib/detect";
+import { SENSOREN } from "@/lib/types";
 import type { Fehler, Messwert, Richtung, Serie } from "@/lib/types";
 import { parseXml, rootName } from "@/lib/xml";
 
@@ -49,6 +50,11 @@ export function parseSdat(xml: string, datei: string): SdatErgebnis {
   const match = documentId.match(/_(ID\d+)$/);
   const sensorId = match ? match[1] : "unbekannt";
 
+  // e.g. ID26256 from 2023 on, the client said to skip those
+  if (!(SENSOREN as readonly string[]).includes(sensorId)) {
+    return error(datei, `Sensor ${sensorId} ist nicht Teil des Auftrags`);
+  }
+
   const data = root.MeteringData;
   if (!data) {
     return error(datei, "MeteringData fehlt");
@@ -64,7 +70,7 @@ export function parseSdat(xml: string, datei: string): SdatErgebnis {
     return error(datei, "Weder Consumption- noch ProductionMeteringPoint");
   }
 
-  // we only handle 15 min values for now (ID26263 has monthly values)
+  // we only handle 15 min values
   const resolution = data.Resolution;
   if (resolution?.Resolution !== "15" || resolution?.Unit !== "MIN") {
     return error(datei, "Keine 15-Minuten-Auflösung");
