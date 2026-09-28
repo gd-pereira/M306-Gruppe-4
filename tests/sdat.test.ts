@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { SensorId } from "@/lib/types";
 
+// checks the fixture files themselves, not the parser
+
 const sensorIds: SensorId[] = ["ID742", "ID735", "ID26256", "ID26257"];
 
 function readFixture(name: string): string {
@@ -15,6 +17,7 @@ describe("SDAT-Testdateien", () => {
       const xml = readFixture(`sdat-${id}.xml`);
 
       expect(xml).toMatch(new RegExp(`<rsm:DocumentID>[^<]*_${id}<`));
+      // a normal day has 24 * 4 = 96 values
       expect(xml.match(/<rsm:Observation>/g)).toHaveLength(96);
     },
   );
@@ -22,6 +25,7 @@ describe("SDAT-Testdateien", () => {
   it("kaputte Datei ist unvollständig", () => {
     const xml = readFixture("sdat-kaputt.xml");
 
+    // the file was cut off in the middle, so the closing tag is missing
     expect(xml).not.toContain("</rsm:ValidatedMeteredData_12>");
   });
 });

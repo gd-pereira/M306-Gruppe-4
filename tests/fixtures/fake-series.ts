@@ -1,45 +1,58 @@
 import type { Messwert, Serie } from "@/lib/types";
 
-// 2019-03-11T23:00:00Z = Mitternacht Schweizer Zeit
-const START = Date.UTC(2019, 2, 11, 23, 0, 0) / 1000;
-const STEP = 15 * 60;
-const COUNT = 96;
+// fake data so the ui can build charts before the real parser is wired up
+// one day in 15 min steps
 
-const round = (n: number) => Math.round(n * 1000) / 1000;
+const START = Date.UTC(2019, 2, 11, 23, 0, 0) / 1000; // midnight swiss time
+const STEP = 15 * 60; // 15 min in seconds
+const COUNT = 96; // 24 h * 4
 
-function verbrauch(fn: (stunde: number) => number): Messwert[] {
-  return Array.from({ length: COUNT }, (_, i) => ({
-    ts: START + i * STEP,
-    wert: round(fn(i / 4)),
-  }));
+function round(n: number): number {
+  return Math.round(n * 1000) / 1000;
 }
 
-function zaehlerstand(werte: Messwert[], startwert: number): Messwert[] {
-  let summe = startwert;
-  return werte.map((m) => {
-    summe += m.wert;
-    return { ts: m.ts, wert: round(summe) };
-  });
+// builds 96 usage values, getValue gets the hour of the day (0 to 23.75)
+function makeUsage(getValue: (hour: number) => number): Messwert[] {
+  const werte: Messwert[] = [];
+  for (let i = 0; i < COUNT; i++) {
+    werte.push({ ts: START + i * STEP, wert: round(getValue(i / 4)) });
+  }
+  return werte;
 }
 
-// Bezug: Grundlast plus Spitzen am Morgen und Abend
-const bezug = verbrauch(
-  (h) => 0.6 + (h >= 6 && h < 9 ? 2 : 0) + (h >= 17 && h < 21 ? 3 : 0),
-);
+// meter reading = start value + everything used so far
+function makeReadings(usage: Messwert[], startValue: number): Messwert[] {
+  let total = startValue;
+  const werte: Messwert[] = [];
+  for (const m of usage) {
+    total += m.wert;
+    werte.push({ ts: m.ts, wert: round(total) });
+  }
+  return werte;
+}
 
-// Einspeisung: Sonnenkurve von 6 bis 18 Uhr
-const einspeisung = verbrauch(
-  (h) => Math.max(0, Math.sin((Math.PI * (h - 6)) / 12)) * 4,
-);
+// bezug: base load, more in the morning (6-9) and evening (17-21)
+const bezug = makeUsage((hour) => {
+  let value = 0.6;
+  if (hour >= 6 && hour < 9) value += 2;
+  if (hour >= 17 && hour < 21) value += 3;
+  return value;
+});
 
-// Startwerte aus ESL Januar 2019: 1.8.1 + 1.8.2 bzw. 2.8.1 + 2.8.2
+// einspeisung: sun curve between 6 and 18, nothing at night
+const einspeisung = makeUsage((hour) => {
+  const sun = Math.sin((Math.PI * (hour - 6)) / 12);
+  return Math.max(0, sun) * 4;
+});
+
+// start values from the esl file of january 2019 (1.8.1 + 1.8.2 and 2.8.1 + 2.8.2)
 export const fakeSeries: Serie[] = [
   { sensorId: "ID742", richtung: "bezug", art: "verbrauch", werte: bezug },
   {
     sensorId: "ID742",
     richtung: "bezug",
     art: "zaehlerstand",
-    werte: zaehlerstand(bezug, 19216.2),
+    werte: makeReadings(bezug, 19216.2),
   },
   {
     sensorId: "ID735",
@@ -51,6 +64,6 @@ export const fakeSeries: Serie[] = [
     sensorId: "ID735",
     richtung: "einspeisung",
     art: "zaehlerstand",
-    werte: zaehlerstand(einspeisung, 11801.2),
+    werte: makeReadings(einspeisung, 11801.2),
   },
 ];

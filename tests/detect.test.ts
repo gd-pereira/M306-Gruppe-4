@@ -7,6 +7,7 @@ function readFixture(name: string): string {
 }
 
 describe("detectDateityp", () => {
+  // ID26263 can't be parsed, but it's still an sdat file
   it.each([
     "sdat-ID742.xml",
     "sdat-ID735.xml",
@@ -26,6 +27,7 @@ describe("detectDateityp", () => {
   });
 
   it("unbekanntes XML ergibt null", () => {
+    // valid xml, but neither sdat nor esl
     expect(detectDateityp("<andere><x>1</x></andere>")).toBeNull();
   });
 });

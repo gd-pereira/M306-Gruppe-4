@@ -8,6 +8,7 @@ function parseFixture(name: string) {
 }
 
 describe("parseSdat", () => {
+  // the new ids from 2023 on (26256, 26257) map to the same directions as the old ones
   const varianten: [string, Richtung][] = [
     ["ID742", "bezug"],
     ["ID735", "einspeisung"],
@@ -20,11 +21,14 @@ describe("parseSdat", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+
     const { serie } = result;
     expect(serie.sensorId).toBe(id);
     expect(serie.richtung).toBe(richtung);
     expect(serie.art).toBe("verbrauch");
     expect(serie.werte).toHaveLength(96);
+
+    // every value should be exactly 15 min (900 s) after the one before
     for (let i = 1; i < serie.werte.length; i++) {
       expect(serie.werte[i].ts - serie.werte[i - 1].ts).toBe(900);
     }
@@ -34,6 +38,7 @@ describe("parseSdat", () => {
     const result = parseFixture("sdat-ID742.xml");
     if (!result.ok) throw new Error(result.fehler.meldung);
 
+    // values taken by hand from the fixture file
     const start = Date.UTC(2019, 2, 11, 23, 0, 0) / 1000; // 2019-03-11T23:00:00Z
     const { werte } = result.serie;
     expect(werte[0]).toEqual({ ts: start, wert: 3 });

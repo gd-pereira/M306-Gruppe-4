@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
+    // same "@/..." imports as in next.js
     alias: { "@": path.resolve(import.meta.dirname) },
   },
   test: {

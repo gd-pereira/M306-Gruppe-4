@@ -2,33 +2,37 @@ import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 export type XmlDoc = Record<string, unknown>;
 
-// Elemente, die mehrfach vorkommen können, sind immer ein Array
-const ARRAY_TAGS = new Set(["Observation", "TimePeriod", "ValueRow"]);
+// these tags can show up more than once, so we always want an array
+// (otherwise a single <Observation> would be an object instead of a list)
+const ARRAY_TAGS = ["Observation", "Meter", "TimePeriod", "ValueRow"];
 
 const parser = new XMLParser({
-  ignoreAttributes: false, // ESL braucht Attribute (obis, value, end)
+  ignoreAttributes: false, // esl stores its data in attributes (obis, value, end)
   attributeNamePrefix: "",
-  ignoreDeclaration: true,
-  removeNSPrefix: true, // "rsm:Observation" -> "Observation"
-  parseTagValue: false, // alles als String, Zahlen werden selbst umgewandelt
-  isArray: (name, _jpath, _isLeaf, isAttribute) =>
-    !isAttribute && ARRAY_TAGS.has(name),
+  ignoreDeclaration: true, // skip the <?xml ...?> line
+  removeNSPrefix: true, // "rsm:Observation" becomes "Observation"
+  parseTagValue: false, // keep everything as text, we convert numbers ourselves
+  isArray: (tagName) => ARRAY_TAGS.includes(tagName),
 });
 
+// turns xml text into a js object, or returns an error message if the xml is broken
 export function parseXml(
   xml: string,
 ): { ok: true; doc: XmlDoc } | { ok: false; meldung: string } {
-  const valid = XMLValidator.validate(xml);
-  if (valid !== true) {
+  // the parser alone doesn't always complain about broken xml, so check first
+  const check = XMLValidator.validate(xml);
+  if (check !== true) {
     return {
       ok: false,
-      meldung: `Ungültiges XML: ${valid.err.msg} (Zeile ${valid.err.line})`,
+      meldung: `Ungültiges XML: ${check.err.msg} (Zeile ${check.err.line})`,
     };
   }
-  return { ok: true, doc: parser.parse(xml) as XmlDoc };
+
+  const doc = parser.parse(xml) as XmlDoc;
+  return { ok: true, doc };
 }
 
-/** Name des obersten Elements, z.B. "ValidatedMeteredData_14" */
+// name of the outermost tag, e.g. "ValidatedMeteredData_14" or "ESLBillingData"
 export function rootName(doc: XmlDoc): string | undefined {
   return Object.keys(doc)[0];
 }

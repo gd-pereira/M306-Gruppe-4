@@ -5,7 +5,7 @@ import { parseXml, rootName } from "@/lib/xml";
 export type SdatErgebnis =
   { ok: true; serie: Serie } | { ok: false; fehler: Fehler };
 
-// Nur die Teile des SDAT-XML, die gelesen werden
+// only the parts of the sdat file we actually read
 interface SdatRoot {
   ValidatedMeteredData_HeaderInformation?: {
     InstanceDocument?: { DocumentID?: string };
@@ -22,54 +22,77 @@ interface SdatRoot {
   };
 }
 
-const RESOLUTION_SECONDS = 15 * 60;
+const FIFTEEN_MINUTES = 15 * 60; // in seconds
 
+function error(datei: string, meldung: string): SdatErgebnis {
+  return { ok: false, fehler: { datei, meldung } };
+}
+
+// reads one sdat file into a series of 15 min usage values
+// never throws, problems end up in the error list instead
 export function parseSdat(xml: string, datei: string): SdatErgebnis {
-  const fehler = (meldung: string): SdatErgebnis => ({
-    ok: false,
-    fehler: { datei, meldung },
-  });
-
   const result = parseXml(xml);
-  if (!result.ok) return fehler(result.meldung);
+  if (!result.ok) {
+    return error(datei, result.meldung);
+  }
 
-  const rootKey = rootName(result.doc);
-  if (!rootKey?.startsWith(SDAT_ROOT_PREFIX)) {
-    return fehler("Keine SDAT-Datei");
+  const rootKey = rootName(result.doc) ?? "";
+  if (!rootKey.startsWith(SDAT_ROOT_PREFIX)) {
+    return error(datei, "Keine SDAT-Datei");
   }
   const root = result.doc[rootKey] as SdatRoot;
 
+  // DocumentID looks like "eslevu121963_BR2294_ID742", we want the "ID742" at the end
   const documentId =
-    root.ValidatedMeteredData_HeaderInformation?.InstanceDocument?.DocumentID;
-  const sensorId = documentId?.match(/_(ID\d+)$/)?.[1] ?? "unbekannt";
+    root.ValidatedMeteredData_HeaderInformation?.InstanceDocument?.DocumentID ??
+    "";
+  const match = documentId.match(/_(ID\d+)$/);
+  const sensorId = match ? match[1] : "unbekannt";
 
-  const md = root.MeteringData;
-  if (!md) return fehler("MeteringData fehlt");
-
-  let richtung: Richtung;
-  if (md.ConsumptionMeteringPoint !== undefined) richtung = "bezug";
-  else if (md.ProductionMeteringPoint !== undefined) richtung = "einspeisung";
-  else return fehler("Weder Consumption- noch ProductionMeteringPoint");
-
-  if (md.Resolution?.Resolution !== "15" || md.Resolution?.Unit !== "MIN") {
-    return fehler("Keine 15-Minuten-Auflösung");
+  const data = root.MeteringData;
+  if (!data) {
+    return error(datei, "MeteringData fehlt");
   }
 
-  const start = Date.parse(md.Interval?.StartDateTime ?? "") / 1000;
-  if (Number.isNaN(start)) return fehler("Ungültige StartDateTime");
+  // the direction comes from the tag name, not from the sensor id
+  let richtung: Richtung;
+  if (data.ConsumptionMeteringPoint !== undefined) {
+    richtung = "bezug";
+  } else if (data.ProductionMeteringPoint !== undefined) {
+    richtung = "einspeisung";
+  } else {
+    return error(datei, "Weder Consumption- noch ProductionMeteringPoint");
+  }
+
+  // we only handle 15 min values for now (ID26263 has monthly values)
+  const resolution = data.Resolution;
+  if (resolution?.Resolution !== "15" || resolution?.Unit !== "MIN") {
+    return error(datei, "Keine 15-Minuten-Auflösung");
+  }
+
+  // start time is in UTC ("...Z"), Date.parse gives milliseconds
+  const start = Date.parse(data.Interval?.StartDateTime ?? "") / 1000;
+  if (Number.isNaN(start)) {
+    return error(datei, "Ungültige StartDateTime");
+  }
 
   const werte: Messwert[] = [];
-  for (const obs of md.Observation ?? []) {
-    const sequence = Number(obs.Position?.Sequence);
-    const wert = Number(obs.Volume);
+  for (const observation of data.Observation ?? []) {
+    const sequence = Number(observation.Position?.Sequence);
+    const wert = Number(observation.Volume);
+
     if (!Number.isInteger(sequence) || sequence < 1 || Number.isNaN(wert)) {
-      return fehler(
-        `Ungültige Observation (Sequence ${obs.Position?.Sequence})`,
-      );
+      return error(datei, `Ungültige Observation (Sequence ${sequence})`);
     }
-    werte.push({ ts: start + (sequence - 1) * RESOLUTION_SECONDS, wert });
+
+    // sequence starts at 1, so the first value is exactly at the start time
+    const ts = start + (sequence - 1) * FIFTEEN_MINUTES;
+    werte.push({ ts, wert });
   }
-  if (werte.length === 0) return fehler("Keine Messwerte");
+
+  if (werte.length === 0) {
+    return error(datei, "Keine Messwerte");
+  }
 
   werte.sort((a, b) => a.ts - b.ts);
 
