@@ -8,7 +8,7 @@ export interface Messwert {
 }
 
 export interface Serie {
-  sensorId: SensorId;
+  sensorId: string; // e.g. "ID742", only additional info
   richtung: Richtung;
   art: "verbrauch" | "zaehlerstand";
   werte: Messwert[]; // sorted by ts, no duplicates
