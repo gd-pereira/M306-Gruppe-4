@@ -3,7 +3,7 @@ export type SensorId = "ID742" | "ID735" | "ID26256" | "ID26257";
 // bezug = power from the grid, einspeisung = solar power fed into the grid
 export type Richtung = "bezug" | "einspeisung";
 
-// one measurement, ts is in unix seconds (UTC)
+// one measurement, ts is in unix seconds
 export interface Messwert {
   ts: number;
   wert: number; // kWh
