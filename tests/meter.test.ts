@@ -103,10 +103,17 @@ describe("vergleicheMitEsl", () => {
   });
 
   it("merkt, wenn SDAT-Werte fehlen", () => {
-    const [vergleich] = vergleicheMitEsl(werte.slice(0, 3), esl(10));
+    // the 3rd value is missing, like the gaps in 02/2020, 06/2020, 02/2021 and 03/2021
+    const mitLuecke = [werte[0], werte[1], werte[3]];
+    const [vergleich] = vergleicheMitEsl(mitLuecke, esl(10));
 
-    expect(vergleich.sdat).toBe(6);
+    expect(vergleich.sdat).toBe(7);
     expect(vergleich.vollstaendig).toBe(false);
+  });
+
+  it("Zeitraum, in dem die SDAT-Daten enden, wird übersprungen", () => {
+    // like 09/2021: sdat stops on 06.09., that is not a gap
+    expect(vergleicheMitEsl(werte.slice(0, 3), esl(10))).toEqual([]);
   });
 
   it("Zeiträume ohne SDAT-Werte werden übersprungen", () => {

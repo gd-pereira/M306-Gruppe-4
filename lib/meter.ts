@@ -89,19 +89,24 @@ export function berechneZaehlerstand(
 
 // compares the sdat sum between two esl readings with the difference of those readings
 // and checks if every 15 min value is there
-// time ranges without any sdat value are skipped (e.g. after september 2021)
+// skipped: time ranges without any sdat value and the range where sdat ends (06.09.2021),
+// that one is not a gap, the data just stops. the client confirmed only the 4 months with gaps
 export function vergleicheMitEsl(
   verbrauch: Messwert[],
   esl: Messwert[],
 ): Vergleich[] {
   const vergleiche: Vergleich[] = [];
+  if (verbrauch.length === 0) {
+    return vergleiche;
+  }
+  const sdatEnde = verbrauch[verbrauch.length - 1].ts + INTERVALL;
 
   for (let i = 1; i < esl.length; i++) {
     const von = esl[i - 1];
     const bis = esl[i];
 
     const werte = ausschnitt(verbrauch, von.ts, bis.ts);
-    if (werte.length === 0) {
+    if (werte.length === 0 || bis.ts > sdatEnde) {
       continue;
     }
 

@@ -45,7 +45,7 @@ describe("parseSdat", () => {
 
   it("liest das Erstellungsdatum der Datei", () => {
     const result = parseFixture("sdat-ID742.xml");
-    if (!result.ok) throw new Error(result.fehler.meldung);
+    if (!result.ok) throw new Error("Datei sollte gelesen werden");
 
     // <rsm:Creation>2019-03-13T08:31:00Z</rsm:Creation>
     expect(result.serie.erstellt).toBe(Date.UTC(2019, 2, 13, 8, 31) / 1000);
@@ -62,7 +62,7 @@ describe("parseSdat", () => {
         xml.replace("</rsm:Volume>", platzhalter),
         "platzhalter.xml",
       );
-      if (!result.ok) throw new Error(result.fehler.meldung);
+      if (!result.ok) throw new Error("Datei sollte gelesen werden");
 
       const start = Date.UTC(2019, 2, 11, 23, 0, 0) / 1000;
       expect(result.serie.werte).toHaveLength(95);
@@ -88,7 +88,7 @@ describe("parseSdat", () => {
         ),
         "ersatzwert.xml",
       );
-      if (!result.ok) throw new Error(result.fehler.meldung);
+      if (!result.ok) throw new Error("Datei sollte gelesen werden");
 
       expect(result.serie.werte).toHaveLength(96);
     });
