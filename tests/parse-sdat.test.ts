@@ -33,7 +33,7 @@ describe("parseSdat", () => {
 
   it("ID742: Zeitstempel und Werte stimmen", () => {
     const result = parseFixture("sdat-ID742.xml");
-    if (!result.ok) throw new Error(result.fehler.meldung);
+    if (!result.ok) throw new Error("ID742 sollte gelesen werden");
 
     // values taken by hand from the fixture file
     const start = Date.UTC(2019, 2, 11, 23, 0, 0) / 1000; // 2019-03-11T23:00:00Z
@@ -98,22 +98,33 @@ describe("parseSdat", () => {
     const result = parseFixture("sdat-kaputt.xml");
 
     expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (result.ok || !("fehler" in result)) throw new Error("Fehler erwartet");
     expect(result.fehler.datei).toBe("sdat-kaputt.xml");
     expect(result.fehler.meldung).toContain("Ungültiges XML");
   });
 
-  // the client only wants ID742 and ID735
-  it.each(["ID26256", "ID26257", "ID26263"])(
-    "%s ist nicht Teil des Auftrags",
-    (id) => {
-      const result = parseFixture(`sdat-${id}.xml`);
+  // the client only wants ID742 and ID735, all others are ignored (not an error)
+  it.each(["ID26256", "ID26257", "ID26263"])("%s wird ignoriert", (id) => {
+    const result = parseFixture(`sdat-${id}.xml`);
 
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.fehler.meldung).toContain("nicht Teil des Auftrags");
-    },
-  );
+    expect(result).toEqual({
+      ok: false,
+      ignoriert: { datei: `sdat-${id}.xml`, sensorId: id },
+    });
+  });
+
+  it("DocumentID ohne Sensor-ID ergibt Fehler", () => {
+    const xml = readFileSync("tests/fixtures/sdat-ID742.xml", "utf-8").replace(
+      /_ID742</,
+      "<",
+    );
+    const result = parseSdat(xml, "ohne-id.xml");
+
+    expect(result).toEqual({
+      ok: false,
+      fehler: { datei: "ohne-id.xml", meldung: "Sensor-ID fehlt in DocumentID" },
+    });
+  });
 
   it("ESL-Datei ist keine SDAT-Datei", () => {
     const result = parseFixture("esl-2019-01.xml");

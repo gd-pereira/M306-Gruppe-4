@@ -1,10 +1,19 @@
 import { SDAT_ROOT_PREFIX } from "@/lib/detect";
 import { SENSOREN } from "@/lib/types";
-import type { Fehler, Messwert, Richtung, Serie } from "@/lib/types";
+import type {
+  Fehler,
+  Ignoriert,
+  Messwert,
+  Richtung,
+  Serie,
+} from "@/lib/types";
 import { parseXml, rootName } from "@/lib/xml";
 
+// ignoriert is not an error, the import page lists those files separately
 export type SdatErgebnis =
-  { ok: true; serie: Serie } | { ok: false; fehler: Fehler };
+  | { ok: true; serie: Serie }
+  | { ok: false; fehler: Fehler }
+  | { ok: false; ignoriert: Ignoriert };
 
 // only the parts of the sdat file we actually read
 interface SdatRoot {
@@ -53,11 +62,14 @@ export function parseSdat(xml: string, datei: string): SdatErgebnis {
     root.ValidatedMeteredData_HeaderInformation?.InstanceDocument?.DocumentID ??
     "";
   const match = documentId.match(/_(ID\d+)$/);
-  const sensorId = match ? match[1] : "unbekannt";
+  if (!match) {
+    return error(datei, "Sensor-ID fehlt in DocumentID");
+  }
+  const sensorId = match[1];
 
-  // e.g. ID26256 from 2023 on, the client said to skip those
+  // e.g. ID26256 from 2023 on, the client said to ignore all sensors except these two
   if (!(SENSOREN as readonly string[]).includes(sensorId)) {
-    return error(datei, `Sensor ${sensorId} ist nicht Teil des Auftrags`);
+    return { ok: false, ignoriert: { datei, sensorId } };
   }
 
   const data = root.MeteringData;

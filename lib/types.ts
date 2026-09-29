@@ -25,3 +25,9 @@ export interface Fehler {
   datei: string;
   meldung: string;
 }
+
+// a valid file from a sensor the client wants us to ignore, e.g. ID26256
+export interface Ignoriert {
+  datei: string;
+  sensorId: string;
+}
