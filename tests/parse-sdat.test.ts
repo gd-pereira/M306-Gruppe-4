@@ -67,6 +67,7 @@ describe("parseSdat", () => {
       const start = Date.UTC(2019, 2, 11, 23, 0, 0) / 1000;
       expect(result.serie.werte).toHaveLength(95);
       expect(result.serie.werte[0]).toEqual({ ts: start + 900, wert: 2.7 });
+      expect(result.platzhalter).toBe(1);
     });
 
     it("Datei nur mit Platzhaltern ist gültig, aber leer", () => {
@@ -78,6 +79,7 @@ describe("parseSdat", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.serie.werte).toEqual([]);
+      expect(result.platzhalter).toBe(96);
     });
 
     it("andere Conditions (z.B. 56 = Ersatzwert) sind echte Werte", () => {
@@ -91,6 +93,7 @@ describe("parseSdat", () => {
       if (!result.ok) throw new Error("Datei sollte gelesen werden");
 
       expect(result.serie.werte).toHaveLength(96);
+      expect(result.platzhalter).toBe(0);
     });
   });
 
@@ -122,7 +125,10 @@ describe("parseSdat", () => {
 
     expect(result).toEqual({
       ok: false,
-      fehler: { datei: "ohne-id.xml", meldung: "Sensor-ID fehlt in DocumentID" },
+      fehler: {
+        datei: "ohne-id.xml",
+        meldung: "Sensor-ID fehlt in DocumentID",
+      },
     });
   });
 

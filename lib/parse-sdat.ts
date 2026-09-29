@@ -1,17 +1,12 @@
 import { SDAT_ROOT_PREFIX } from "@/lib/detect";
 import { SENSOREN } from "@/lib/types";
-import type {
-  Fehler,
-  Ignoriert,
-  Messwert,
-  Richtung,
-  Serie,
-} from "@/lib/types";
+import type { Fehler, Ignoriert, Messwert, Richtung, Serie } from "@/lib/types";
 import { parseXml, rootName } from "@/lib/xml";
 
 // ignoriert is not an error, the import page lists those files separately
+// platzhalter = how many condition 21 values were skipped, the import page shows the total
 export type SdatErgebnis =
-  | { ok: true; serie: Serie }
+  | { ok: true; serie: Serie; platzhalter: number }
   | { ok: false; fehler: Fehler }
   | { ok: false; ignoriert: Ignoriert };
 
@@ -105,6 +100,7 @@ export function parseSdat(xml: string, datei: string): SdatErgebnis {
   }
 
   const werte: Messwert[] = [];
+  let platzhalter = 0;
   for (const observation of observations) {
     const sequence = Number(observation.Position?.Sequence);
     const wert = Number(observation.Volume);
@@ -114,6 +110,7 @@ export function parseSdat(xml: string, datei: string): SdatErgebnis {
     }
 
     if (observation.Condition === PLATZHALTER) {
+      platzhalter++;
       continue;
     }
 
@@ -135,5 +132,6 @@ export function parseSdat(xml: string, datei: string): SdatErgebnis {
   return {
     ok: true,
     serie: { sensorId, richtung, art: "verbrauch", werte, erstellt },
+    platzhalter,
   };
 }
