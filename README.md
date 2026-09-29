@@ -1,27 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/brand/flux-logo-dark.svg" />
+    <img src="public/brand/flux-logo.svg" alt="Flux" width="320" />
+  </picture>
+</p>
 
-## Getting Started
+Flux liest SDAT- und ESL-Dateien ein und zeigt Verbrauch, Einspeisung und Zählerstand. Alle Daten werden lokal im Browser verarbeitet.
 
-First, run the development server:
+## Entwicklung
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Danach [http://localhost:3000](http://localhost:3000) öffnen.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Brand
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Datei                              | Verwendung                         |
+| ---------------------------------- | ---------------------------------- |
+| `public/brand/flux-logo.svg`       | Logo auf hellem Hintergrund        |
+| `public/brand/flux-logo-dark.svg`  | Logo auf dunklem Hintergrund       |
+| `public/brand/flux-mark.svg`       | Nur Bildmarke, heller Hintergrund  |
+| `public/brand/flux-mark-dark.svg`  | Nur Bildmarke, dunkler Hintergrund |
 
-## Deploy on Vercel
+Im Code `FluxLogo` bzw. `FluxMark` aus `components/brand/flux-logo.tsx` verwenden. Pfeil und Schriftzug übernehmen die Textfarbe (`currentColor`), die Sonne bleibt immer Amber.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Amber `#FFB603` (Tailwind: `bg-brand`, `text-brand`), in Diagrammen für Einspeisung (`--chart-line-secondary`)
+- Tinte `#171717` bzw. Weiss auf dunklem Hintergrund, in Diagrammen für Bezug
+- Rot `#F04438` für unvollständige Monate und Fehler
+- Schriftzug: Montserrat ExtraBold, in den SVGs bereits als Pfad

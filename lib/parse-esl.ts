@@ -1,10 +1,12 @@
 import { ESL_ROOT } from "@/lib/detect";
-import type { Fehler, Messwert, Serie } from "@/lib/types";
+import { roundKwh } from "@/lib/math";
+import { zurichToUnix } from "@/lib/time";
+import { SENSOR_IDS } from "@/lib/types";
+import type { DataPoint, FileError, Series } from "@/lib/types";
 import { parseXml, rootName } from "@/lib/xml";
-import { zurichZuUnix } from "@/lib/zeit";
 
-export type EslErgebnis =
-  { ok: true; serien: Serie[] } | { ok: false; fehler: Fehler };
+export type EslResult =
+  { ok: true; series: Series[] } | { ok: false; error: FileError };
 
 // only the parts of the esl file we actually read
 interface EslRoot {
@@ -17,8 +19,8 @@ interface EslRoot {
   }[];
 }
 
-function error(datei: string, meldung: string): EslErgebnis {
-  return { ok: false, fehler: { datei, meldung } };
+function fail(file: string, message: string): EslResult {
+  return { ok: false, error: { file, message } };
 }
 
 // adds high and low tariff together
@@ -31,86 +33,84 @@ function addTariffs(
   if (readings[high] === undefined || readings[low] === undefined) {
     return undefined;
   }
-  const sum = readings[high] + readings[low];
-  // 4755.3 + 14460.9 gives 19216.199999... in js, so round it
-  return Math.round(sum * 10000) / 10000;
+  return roundKwh(readings[high] + readings[low]);
 }
 
-// reads one esl file into absolute meter readings for bezug and einspeisung
+// reads one esl file into absolute meter readings for consumption and feed-in
 // never throws, problems end up in the error list instead
-export function parseEsl(xml: string, datei: string): EslErgebnis {
+export function parseEsl(xml: string, file: string): EslResult {
   const result = parseXml(xml);
   if (!result.ok) {
-    return error(datei, result.meldung);
+    return fail(file, result.message);
   }
 
   if (rootName(result.doc) !== ESL_ROOT) {
-    return error(datei, "Keine ESL-Datei");
+    return fail(file, "Not an ESL file");
   }
   const root = (result.doc[ESL_ROOT] ?? {}) as EslRoot;
 
-  const bezug: Messwert[] = [];
-  const einspeisung: Messwert[] = [];
+  const consumption: DataPoint[] = [];
+  const feedIn: DataPoint[] = [];
 
   // some files have a second meter (water, obis 8-1:1.8.0), its codes just don't match below
   for (const meter of root.Meter ?? []) {
     for (const period of meter.TimePeriod ?? []) {
       // "end" has no time zone, it's swiss local time
-      const ts = zurichZuUnix(period.end ?? "");
+      const ts = zurichToUnix(period.end ?? "");
       if (Number.isNaN(ts)) {
-        return error(datei, `Ungültiger Zeitpunkt: ${period.end}`);
+        return fail(file, `Invalid time: ${period.end}`);
       }
 
       // collect all readings of this period, e.g. { "1-1:1.8.1": 4755.3, ... }
       const readings: Record<string, number> = {};
       for (const row of period.ValueRow ?? []) {
-        const wert = Number(row.value);
-        if (row.obis && row.value !== undefined && !Number.isNaN(wert)) {
-          readings[row.obis] = wert;
+        const value = Number(row.value);
+        if (row.obis && row.value !== undefined && !Number.isNaN(value)) {
+          readings[row.obis] = value;
         }
       }
 
-      // 1.8.x = bezug, 2.8.x = einspeisung (see Projektbeschreibung)
-      const bezugWert = addTariffs(readings, "1-1:1.8.1", "1-1:1.8.2");
-      if (bezugWert !== undefined) {
-        bezug.push({ ts, wert: bezugWert });
+      // 1.8.x = consumption, 2.8.x = feed-in (see Projektbeschreibung)
+      const consumptionValue = addTariffs(readings, "1-1:1.8.1", "1-1:1.8.2");
+      if (consumptionValue !== undefined) {
+        consumption.push({ ts, value: consumptionValue });
       }
 
-      const einspeisungWert = addTariffs(readings, "1-1:2.8.1", "1-1:2.8.2");
-      if (einspeisungWert !== undefined) {
-        einspeisung.push({ ts, wert: einspeisungWert });
+      const feedInValue = addTariffs(readings, "1-1:2.8.1", "1-1:2.8.2");
+      if (feedInValue !== undefined) {
+        feedIn.push({ ts, value: feedInValue });
       }
     }
   }
 
-  bezug.sort((a, b) => a.ts - b.ts);
-  einspeisung.sort((a, b) => a.ts - b.ts);
+  consumption.sort((a, b) => a.ts - b.ts);
+  feedIn.sort((a, b) => a.ts - b.ts);
 
   // the same readings show up in several esl files, the newest file wins (see timeseries.ts)
   // "created" is swiss local time like "end", missing counts as oldest
-  const created = zurichZuUnix(root.Header?.created ?? "");
-  const erstellt = Number.isNaN(created) ? 0 : created;
+  const created = zurichToUnix(root.Header?.created ?? "");
+  const createdAt = Number.isNaN(created) ? 0 : created;
 
   // esl has no sensor id, so we use the ids from the mapping table
-  const serien: Serie[] = [];
-  if (bezug.length > 0) {
-    serien.push({
-      sensorId: "ID742",
-      richtung: "bezug",
-      art: "zaehlerstand",
-      werte: bezug,
-      erstellt,
+  const series: Series[] = [];
+  if (consumption.length > 0) {
+    series.push({
+      sensorId: SENSOR_IDS.consumption,
+      direction: "consumption",
+      kind: "meterReading",
+      points: consumption,
+      createdAt,
     });
   }
-  if (einspeisung.length > 0) {
-    serien.push({
-      sensorId: "ID735",
-      richtung: "einspeisung",
-      art: "zaehlerstand",
-      werte: einspeisung,
-      erstellt,
+  if (feedIn.length > 0) {
+    series.push({
+      sensorId: SENSOR_IDS.feedIn,
+      direction: "feedIn",
+      kind: "meterReading",
+      points: feedIn,
+      createdAt,
     });
   }
 
-  return { ok: true, serien };
+  return { ok: true, series };
 }

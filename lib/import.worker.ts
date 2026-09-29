@@ -1,38 +1,38 @@
 import {
-  auswerten,
-  dateiEinlesen,
-  neueSammlung,
-  type WorkerNachricht,
+  addFile,
+  buildResult,
+  createParsedFiles,
+  type WorkerMessage,
 } from "@/lib/import";
 
 // runs in its own thread, so the page stays usable while ~5'100 files are read
-// started by importStarten (lib/import-starten.ts), gets the files and sends back the result
+// started by startImport (lib/start-import.ts), gets the files and sends back the result
 
 // a message after every file would be 5'000 messages, that slows down the page
-const FORTSCHRITT_ALLE = 50;
+const PROGRESS_EVERY = 50;
 
-function senden(nachricht: WorkerNachricht) {
-  self.postMessage(nachricht);
+function send(message: WorkerMessage) {
+  self.postMessage(message);
 }
 
 self.onmessage = async (event: MessageEvent<File[]>) => {
-  const dateien = event.data;
-  const sammlung = neueSammlung();
+  const files = event.data;
+  const parsed = createParsedFiles();
 
   try {
-    for (let i = 0; i < dateien.length; i++) {
-      const datei = dateien[i];
-      dateiEinlesen(sammlung, datei.name, await datei.text());
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      addFile(parsed, file.name, await file.text());
 
-      const fertig = i + 1;
-      if (fertig % FORTSCHRITT_ALLE === 0 || fertig === dateien.length) {
-        senden({ typ: "fortschritt", fertig, total: dateien.length });
+      const processed = i + 1;
+      if (processed % PROGRESS_EVERY === 0 || processed === files.length) {
+        send({ type: "progress", processed, total: files.length });
       }
     }
 
-    senden({ typ: "fertig", ergebnis: auswerten(sammlung) });
+    send({ type: "result", result: buildResult(parsed) });
   } catch (error) {
     // the parsers never throw, so this would be a bug in our code
-    senden({ typ: "abbruch", meldung: String(error) });
+    send({ type: "error", message: String(error) });
   }
 };

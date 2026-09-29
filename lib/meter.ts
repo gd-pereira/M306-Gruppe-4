@@ -1,27 +1,23 @@
-import { ausschnitt, ersterIndexAb, INTERVALL } from "@/lib/timeseries";
-import type { Messwert } from "@/lib/types";
+import { roundKwh } from "@/lib/math";
+import { firstIndexFrom, INTERVAL, pointsInRange } from "@/lib/timeseries";
+import type { DataPoint } from "@/lib/types";
 
 // result of comparing sdat with esl for the time between two esl readings
 // there is no allowed deviation: in the test data sdat is always 3x esl (confirmed by the client),
 // so a limit would mark every month. months with missing sdat values are marked instead
-export interface Vergleich {
-  von: number; // ts of the first esl reading
-  bis: number; // ts of the next esl reading
+export interface Comparison {
+  start: number; // ts of the first esl reading
+  end: number; // ts of the next esl reading
   sdat: number; // sum of all sdat values in between (kWh)
   esl: number; // difference of the two esl readings (kWh)
-  vollstaendig: boolean; // false if some sdat values are missing in between
-}
-
-// adding up floats gives things like 19216.199999, so we round to 4 decimals
-function runde(n: number): number {
-  return Math.round(n * 10000) / 10000;
+  complete: boolean; // false if some sdat values are missing in between
 }
 
 // returns the esl reading that is closest in time to ts
 // if both neighbours are equally far away, we take the earlier one
 // esl must be sorted by ts and must not be empty
-function naechsterEslWert(esl: Messwert[], ts: number): Messwert {
-  const i = ersterIndexAb(esl, ts);
+function nearestReading(esl: DataPoint[], ts: number): DataPoint {
+  const i = firstIndexFrom(esl, ts);
 
   // ts is before the first or after the last esl reading
   if (i === 0) {
@@ -32,102 +28,100 @@ function naechsterEslWert(esl: Messwert[], ts: number): Messwert {
   }
 
   // otherwise ts lies between esl[i - 1] and esl[i]
-  const davor = esl[i - 1];
-  const danach = esl[i];
-  if (ts - davor.ts <= danach.ts - ts) {
-    return davor;
+  const before = esl[i - 1];
+  const after = esl[i];
+  if (ts - before.ts <= after.ts - ts) {
+    return before;
   }
-  return danach;
+  return after;
 }
 
-// running total: summen[i] = usage of the first i values
-// summen[0] is 0, summen[1] is the first value, summen[2] the first two, ...
+// running total: sums[i] = usage of the first i values
+// sums[0] is 0, sums[1] is the first value, sums[2] the first two, ...
 // with this we get the usage between two times with one subtraction instead of a loop
-function laufendeSummen(verbrauch: Messwert[]): number[] {
-  const summen = [0];
+function prefixSums(usage: DataPoint[]): number[] {
+  const sums = [0];
   let total = 0;
 
-  for (const messwert of verbrauch) {
-    total += messwert.wert;
-    summen.push(total);
+  for (const point of usage) {
+    total += point.value;
+    sums.push(total);
   }
 
-  return summen;
+  return sums;
 }
 
 // calculates absolute meter readings from the 15 min usage (sdat) and a few known readings (esl)
 // each sdat value is the usage from ts to ts + 15 min, so the reading belongs to the end of that interval
 // we start at the closest esl reading: add the usage when going forward, subtract it when going backward
 // without any esl reading we have no starting point, so we return nothing
-export function berechneZaehlerstand(
-  verbrauch: Messwert[],
-  esl: Messwert[],
-): Messwert[] {
+export function computeMeterReadings(
+  usage: DataPoint[],
+  esl: DataPoint[],
+): DataPoint[] {
   if (esl.length === 0) {
     return [];
   }
 
-  const summen = laufendeSummen(verbrauch);
-  const staende: Messwert[] = [];
+  const sums = prefixSums(usage);
+  const readings: DataPoint[] = [];
 
-  for (const messwert of verbrauch) {
-    const ende = messwert.ts + INTERVALL;
-    const referenz = naechsterEslWert(esl, ende);
+  for (const point of usage) {
+    const end = point.ts + INTERVAL;
+    const reference = nearestReading(esl, end);
 
-    // usage of everything before "ende" and of everything before the esl reading
-    const verbrauchBisEnde = summen[ersterIndexAb(verbrauch, ende)];
-    const verbrauchBisReferenz = summen[ersterIndexAb(verbrauch, referenz.ts)];
+    // usage of everything before "end" and of everything before the esl reading
+    const usageUntilEnd = sums[firstIndexFrom(usage, end)];
+    const usageUntilReference = sums[firstIndexFrom(usage, reference.ts)];
 
     // positive if the esl reading is earlier (add), negative if it is later (subtract)
-    const dazwischen = verbrauchBisEnde - verbrauchBisReferenz;
+    const between = usageUntilEnd - usageUntilReference;
 
-    staende.push({ ts: ende, wert: runde(referenz.wert + dazwischen) });
+    readings.push({ ts: end, value: roundKwh(reference.value + between) });
   }
 
-  return staende;
+  return readings;
 }
 
 // compares the sdat sum between two esl readings with the difference of those readings
 // and checks if every 15 min value is there
 // skipped: time ranges without any sdat value and the range where sdat ends (06.09.2021),
 // that one is not a gap, the data just stops. the client confirmed only the 4 months with gaps
-export function vergleicheMitEsl(
-  verbrauch: Messwert[],
-  esl: Messwert[],
-): Vergleich[] {
-  const vergleiche: Vergleich[] = [];
-  if (verbrauch.length === 0) {
-    return vergleiche;
+export function compareWithEsl(
+  usage: DataPoint[],
+  esl: DataPoint[],
+): Comparison[] {
+  const comparisons: Comparison[] = [];
+  if (usage.length === 0) {
+    return comparisons;
   }
-  const sdatEnde = verbrauch[verbrauch.length - 1].ts + INTERVALL;
+  const sdatEnd = usage[usage.length - 1].ts + INTERVAL;
 
   for (let i = 1; i < esl.length; i++) {
-    const von = esl[i - 1];
-    const bis = esl[i];
+    const start = esl[i - 1];
+    const end = esl[i];
 
-    const werte = ausschnitt(verbrauch, von.ts, bis.ts);
-    if (werte.length === 0 || bis.ts > sdatEnde) {
+    const inRange = pointsInRange(usage, start.ts, end.ts);
+    if (inRange.length === 0 || end.ts > sdatEnd) {
       continue;
     }
 
-    let summe = 0;
-    for (const messwert of werte) {
-      summe += messwert.wert;
+    let sum = 0;
+    for (const point of inRange) {
+      sum += point.value;
     }
-    const sdat = runde(summe);
-    const differenz = runde(bis.wert - von.wert);
 
     // a full range has one value every 15 min
-    const erwartet = (bis.ts - von.ts) / INTERVALL;
+    const expected = (end.ts - start.ts) / INTERVAL;
 
-    vergleiche.push({
-      von: von.ts,
-      bis: bis.ts,
-      sdat,
-      esl: differenz,
-      vollstaendig: werte.length === erwartet,
+    comparisons.push({
+      start: start.ts,
+      end: end.ts,
+      sdat: roundKwh(sum),
+      esl: roundKwh(end.value - start.value),
+      complete: inRange.length === expected,
     });
   }
 
-  return vergleiche;
+  return comparisons;
 }

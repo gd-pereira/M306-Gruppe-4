@@ -18,13 +18,13 @@ const parser = new XMLParser({
 // turns xml text into a js object, or returns an error message if the xml is broken
 export function parseXml(
   xml: string,
-): { ok: true; doc: XmlDoc } | { ok: false; meldung: string } {
+): { ok: true; doc: XmlDoc } | { ok: false; message: string } {
   // the parser alone doesn't always complain about broken xml, so check first
   const check = XMLValidator.validate(xml);
   if (check !== true) {
     return {
       ok: false,
-      meldung: `Ungültiges XML: ${check.err.msg} (Zeile ${check.err.line})`,
+      message: `Invalid XML: ${check.err.msg} (line ${check.err.line})`,
     };
   }
 

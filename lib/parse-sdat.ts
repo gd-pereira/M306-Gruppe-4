@@ -1,14 +1,21 @@
 import { SDAT_ROOT_PREFIX } from "@/lib/detect";
-import { SENSOREN } from "@/lib/types";
-import type { Fehler, Ignoriert, Messwert, Richtung, Serie } from "@/lib/types";
+import { INTERVAL } from "@/lib/timeseries";
+import { SENSOR_IDS } from "@/lib/types";
+import type {
+  DataPoint,
+  Direction,
+  FileError,
+  IgnoredFile,
+  Series,
+} from "@/lib/types";
 import { parseXml, rootName } from "@/lib/xml";
 
-// ignoriert is not an error, the import page lists those files separately
-// platzhalter = how many condition 21 values were skipped, the import page shows the total
-export type SdatErgebnis =
-  | { ok: true; serie: Serie; platzhalter: number }
-  | { ok: false; fehler: Fehler }
-  | { ok: false; ignoriert: Ignoriert };
+// ignored is not an error, the import page lists those files separately
+// placeholders = how many condition 21 values were skipped, the import page shows the total
+export type SdatResult =
+  | { ok: true; series: Series; placeholders: number }
+  | { ok: false; error: FileError }
+  | { ok: false; ignored: IgnoredFile };
 
 // only the parts of the sdat file we actually read
 interface SdatRoot {
@@ -28,27 +35,27 @@ interface SdatRoot {
   };
 }
 
-const FIFTEEN_MINUTES = 15 * 60; // in seconds
-
 // condition 21 = placeholder 0, the real value comes later in a newer file
 // the client said to always take the real value, so we skip these
-const PLATZHALTER = "21";
+const PLACEHOLDER_CONDITION = "21";
 
-function error(datei: string, meldung: string): SdatErgebnis {
-  return { ok: false, fehler: { datei, meldung } };
+const WANTED_SENSORS: readonly string[] = Object.values(SENSOR_IDS);
+
+function fail(file: string, message: string): SdatResult {
+  return { ok: false, error: { file, message } };
 }
 
 // reads one sdat file into a series of 15 min usage values
 // never throws, problems end up in the error list instead
-export function parseSdat(xml: string, datei: string): SdatErgebnis {
+export function parseSdat(xml: string, file: string): SdatResult {
   const result = parseXml(xml);
   if (!result.ok) {
-    return error(datei, result.meldung);
+    return fail(file, result.message);
   }
 
   const rootKey = rootName(result.doc) ?? "";
   if (!rootKey.startsWith(SDAT_ROOT_PREFIX)) {
-    return error(datei, "Keine SDAT-Datei");
+    return fail(file, "Not an SDAT file");
   }
   const root = result.doc[rootKey] as SdatRoot;
 
@@ -58,80 +65,83 @@ export function parseSdat(xml: string, datei: string): SdatErgebnis {
     "";
   const match = documentId.match(/_(ID\d+)$/);
   if (!match) {
-    return error(datei, "Sensor-ID fehlt in DocumentID");
+    return fail(file, "Sensor ID missing in DocumentID");
   }
   const sensorId = match[1];
 
   // e.g. ID26256 from 2023 on, the client said to ignore all sensors except these two
-  if (!(SENSOREN as readonly string[]).includes(sensorId)) {
-    return { ok: false, ignoriert: { datei, sensorId } };
+  if (!WANTED_SENSORS.includes(sensorId)) {
+    return { ok: false, ignored: { file, sensorId } };
   }
 
   const data = root.MeteringData;
   if (!data) {
-    return error(datei, "MeteringData fehlt");
+    return fail(file, "MeteringData missing");
   }
 
   // the direction comes from the tag name, not from the sensor id
-  let richtung: Richtung;
+  let direction: Direction;
   if (data.ConsumptionMeteringPoint !== undefined) {
-    richtung = "bezug";
+    direction = "consumption";
   } else if (data.ProductionMeteringPoint !== undefined) {
-    richtung = "einspeisung";
+    direction = "feedIn";
   } else {
-    return error(datei, "Weder Consumption- noch ProductionMeteringPoint");
+    return fail(
+      file,
+      "Neither ConsumptionMeteringPoint nor ProductionMeteringPoint",
+    );
   }
 
   // we only handle 15 min values
   const resolution = data.Resolution;
   if (resolution?.Resolution !== "15" || resolution?.Unit !== "MIN") {
-    return error(datei, "Keine 15-Minuten-Auflösung");
+    return fail(file, "Resolution is not 15 minutes");
   }
 
   // start time is in UTC ("...Z"), Date.parse gives milliseconds
   const start = Date.parse(data.Interval?.StartDateTime ?? "") / 1000;
   if (Number.isNaN(start)) {
-    return error(datei, "Ungültige StartDateTime");
+    return fail(file, "Invalid StartDateTime");
   }
 
   const observations = data.Observation ?? [];
   if (observations.length === 0) {
-    return error(datei, "Keine Messwerte");
+    return fail(file, "No observations");
   }
 
-  const werte: Messwert[] = [];
-  let platzhalter = 0;
+  const points: DataPoint[] = [];
+  let placeholders = 0;
   for (const observation of observations) {
     const sequence = Number(observation.Position?.Sequence);
-    const wert = Number(observation.Volume);
+    const value = Number(observation.Volume);
 
-    if (!Number.isInteger(sequence) || sequence < 1 || Number.isNaN(wert)) {
-      return error(datei, `Ungültige Observation (Sequence ${sequence})`);
+    if (!Number.isInteger(sequence) || sequence < 1 || Number.isNaN(value)) {
+      return fail(file, `Invalid observation (sequence ${sequence})`);
     }
 
-    if (observation.Condition === PLATZHALTER) {
-      platzhalter++;
+    if (observation.Condition === PLACEHOLDER_CONDITION) {
+      placeholders++;
       continue;
     }
 
     // sequence starts at 1, so the first value is exactly at the start time
-    const ts = start + (sequence - 1) * FIFTEEN_MINUTES;
-    werte.push({ ts, wert });
+    const ts = start + (sequence - 1) * INTERVAL;
+    points.push({ ts, value });
   }
 
   // a file with only placeholders is fine, it just adds no values
-  werte.sort((a, b) => a.ts - b.ts);
+  points.sort((a, b) => a.ts - b.ts);
 
   // missing creation date counts as oldest, so any other file wins
   const creation = Date.parse(
     root.ValidatedMeteredData_HeaderInformation?.InstanceDocument?.Creation ??
       "",
   );
-  const erstellt = Number.isNaN(creation) ? 0 : creation / 1000;
+  const createdAt = Number.isNaN(creation) ? 0 : creation / 1000;
 
   return {
     ok: true,
-    serie: { sensorId, richtung, art: "verbrauch", werte, erstellt },
-    platzhalter,
+    series: { sensorId, direction, kind: "usage", points, createdAt },
+    placeholders,
   };
 }

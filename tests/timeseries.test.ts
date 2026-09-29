@@ -2,173 +2,181 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseEsl } from "@/lib/parse-esl";
 import {
-  ausschnitt,
-  ersterIndexAb,
-  findeLuecken,
-  INTERVALL,
-  zusammenfuehren,
+  findGaps,
+  firstIndexFrom,
+  INTERVAL,
+  mergeSeries,
+  pointsInRange,
 } from "@/lib/timeseries";
-import type { Messwert, Serie } from "@/lib/types";
+import type { DataPoint, Series } from "@/lib/types";
 
 const T = Date.UTC(2019, 2, 11, 23) / 1000; // any start time
 
 // sdat series with values at T, T + 15 min, ...
-function serie(erstellt: number, werte: number[], ab = 0): Serie {
+function series(createdAt: number, values: number[], offset = 0): Series {
   return {
     sensorId: "ID742",
-    richtung: "bezug",
-    art: "verbrauch",
-    erstellt,
-    werte: werte.map((wert, i) => ({ ts: T + (ab + i) * INTERVALL, wert })),
+    direction: "consumption",
+    kind: "usage",
+    createdAt,
+    points: values.map((value, i) => ({
+      ts: T + (offset + i) * INTERVAL,
+      value,
+    })),
   };
 }
 
-describe("zusammenfuehren", () => {
-  it("pro Zeitstempel gewinnt die Datei mit dem neusten Erstellungsdatum", () => {
-    const alt = serie(100, [1, 1, 1]);
-    const neu = serie(200, [2, 2], 1); // overlaps the last two values
+describe("mergeSeries", () => {
+  it("per timestamp the file with the newest creation date wins", () => {
+    const older = series(100, [1, 1, 1]);
+    const newer = series(200, [2, 2], 1); // overlaps the last two values
 
     // order of the files must not matter
-    const erwartet = [
-      { ts: T, wert: 1 },
-      { ts: T + INTERVALL, wert: 2 },
-      { ts: T + 2 * INTERVALL, wert: 2 },
+    const expected = [
+      { ts: T, value: 1 },
+      { ts: T + INTERVAL, value: 2 },
+      { ts: T + 2 * INTERVAL, value: 2 },
     ];
-    expect(zusammenfuehren([alt, neu])).toEqual(erwartet);
-    expect(zusammenfuehren([neu, alt])).toEqual(erwartet);
+    expect(mergeSeries([older, newer])).toEqual(expected);
+    expect(mergeSeries([newer, older])).toEqual(expected);
   });
 
-  it("ältere Datei füllt Werte, die in der neueren fehlen", () => {
+  it("older file fills values that are missing in the newer one", () => {
     // like a newer file where the parser dropped a condition 21 placeholder
-    const alt = serie(100, [0.6, 0.9]);
-    const neu: Serie = { ...serie(200, []), werte: [{ ts: T, wert: 0.3 }] };
+    const older = series(100, [0.6, 0.9]);
+    const newer: Series = {
+      ...series(200, []),
+      points: [{ ts: T, value: 0.3 }],
+    };
 
-    expect(zusammenfuehren([neu, alt])).toEqual([
-      { ts: T, wert: 0.3 },
-      { ts: T + INTERVALL, wert: 0.9 },
+    expect(mergeSeries([newer, older])).toEqual([
+      { ts: T, value: 0.3 },
+      { ts: T + INTERVAL, value: 0.9 },
     ]);
   });
 
-  it("sortiert chronologisch", () => {
-    const spaeter = serie(100, [5], 4);
-    const frueher = serie(100, [1], 0);
+  it("sorts chronologically", () => {
+    const later = series(100, [5], 4);
+    const earlier = series(100, [1], 0);
 
-    const werte = zusammenfuehren([spaeter, frueher]);
-    expect(werte.map((m) => m.ts)).toEqual([T, T + 4 * INTERVALL]);
+    const merged = mergeSeries([later, earlier]);
+    expect(merged.map((p) => p.ts)).toEqual([T, T + 4 * INTERVAL]);
   });
 
-  it("ohne Serien gibt es keine Werte", () => {
-    expect(zusammenfuehren([])).toEqual([]);
+  it("no series give no values", () => {
+    expect(mergeSeries([])).toEqual([]);
   });
 });
 
 // esl files overlap too, e.g. the reading of 1 february is in several monthly exports
-describe("zusammenfuehren mit ESL-Dateien", () => {
-  function bezugAus(xml: string, datei: string): Serie {
-    const result = parseEsl(xml, datei);
-    if (!result.ok) throw new Error(result.fehler.meldung);
-    const bezug = result.serien.find((s) => s.richtung === "bezug");
-    if (!bezug) throw new Error("kein Bezug");
-    return bezug;
+describe("mergeSeries with ESL files", () => {
+  function consumptionFrom(xml: string, file: string): Series {
+    const result = parseEsl(xml, file);
+    if (!result.ok) throw new Error(result.error.message);
+    const consumption = result.series.find(
+      (s) => s.direction === "consumption",
+    );
+    if (!consumption) throw new Error("no consumption");
+    return consumption;
   }
 
-  const januar = readFileSync("tests/fixtures/esl-2019-01.xml", "utf-8");
-  const maerz = readFileSync("tests/fixtures/esl-2019-03.xml", "utf-8");
+  const january = readFileSync("tests/fixtures/esl-2019-01.xml", "utf-8");
+  const march = readFileSync("tests/fixtures/esl-2019-03.xml", "utf-8");
 
   const jan1 = Date.UTC(2018, 11, 31, 23) / 1000; // 2019-01-01 swiss time
   const feb1 = Date.UTC(2019, 0, 31, 23) / 1000;
   const mar1 = Date.UTC(2019, 1, 28, 23) / 1000;
 
-  it("verschiedene Dateien ergeben eine sortierte Liste", () => {
-    const werte = zusammenfuehren([
-      bezugAus(maerz, "maerz.xml"),
-      bezugAus(januar, "januar.xml"),
+  it("different files give one sorted list", () => {
+    const merged = mergeSeries([
+      consumptionFrom(march, "march.xml"),
+      consumptionFrom(january, "january.xml"),
     ]);
 
-    expect(werte).toEqual([
-      { ts: jan1, wert: 19216.2 }, // 4755.3 + 14460.9
-      { ts: feb1, wert: 21869.2 },
-      { ts: mar1, wert: 23468.7 },
+    expect(merged).toEqual([
+      { ts: jan1, value: 19216.2 }, // 4755.3 + 14460.9
+      { ts: feb1, value: 21869.2 },
+      { ts: mar1, value: 23468.7 },
     ]);
   });
 
-  it("doppelter Zeitpunkt: die neuere Datei gewinnt", () => {
+  it("duplicate timestamp: the newer file wins", () => {
     // a later export of the same file with a corrected february reading
-    const korrigiert = maerz
+    const corrected = march
       .replace(
         'created ="2019-03-14T09:34:00"',
         'created ="2019-03-20T09:00:00"',
       )
       .replace('value="5837.2000"', 'value="5837.5000"');
 
-    const erwartet = [
-      { ts: feb1, wert: 21869.5 }, // 5837.5 + 16032.0
-      { ts: mar1, wert: 23468.7 },
+    const expected = [
+      { ts: feb1, value: 21869.5 }, // 5837.5 + 16032.0
+      { ts: mar1, value: 23468.7 },
     ];
     // order of the files must not matter
     expect(
-      zusammenfuehren([
-        bezugAus(maerz, "alt.xml"),
-        bezugAus(korrigiert, "neu.xml"),
+      mergeSeries([
+        consumptionFrom(march, "old.xml"),
+        consumptionFrom(corrected, "new.xml"),
       ]),
-    ).toEqual(erwartet);
+    ).toEqual(expected);
     expect(
-      zusammenfuehren([
-        bezugAus(korrigiert, "neu.xml"),
-        bezugAus(maerz, "alt.xml"),
+      mergeSeries([
+        consumptionFrom(corrected, "new.xml"),
+        consumptionFrom(march, "old.xml"),
       ]),
-    ).toEqual(erwartet);
+    ).toEqual(expected);
   });
 });
 
-describe("findeLuecken", () => {
-  it("findet fehlende 15-Minuten-Werte", () => {
-    const werte: Messwert[] = [0, 1, 4, 5, 8].map((i) => ({
-      ts: T + i * INTERVALL,
-      wert: 1,
+describe("findGaps", () => {
+  it("finds missing 15 min values", () => {
+    const points: DataPoint[] = [0, 1, 4, 5, 8].map((i) => ({
+      ts: T + i * INTERVAL,
+      value: 1,
     }));
 
-    expect(findeLuecken(werte)).toEqual([
-      { von: T + 2 * INTERVALL, bis: T + 4 * INTERVALL },
-      { von: T + 6 * INTERVALL, bis: T + 8 * INTERVALL },
+    expect(findGaps(points)).toEqual([
+      { start: T + 2 * INTERVAL, end: T + 4 * INTERVAL },
+      { start: T + 6 * INTERVAL, end: T + 8 * INTERVAL },
     ]);
   });
 
-  it("lückenlose Reihe hat keine Lücken", () => {
-    expect(findeLuecken(serie(0, [1, 2, 3, 4]).werte)).toEqual([]);
+  it("a series without gaps has no gaps", () => {
+    expect(findGaps(series(0, [1, 2, 3, 4]).points)).toEqual([]);
   });
 });
 
-describe("ausschnitt", () => {
-  const werte = serie(0, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).werte;
+describe("pointsInRange", () => {
+  const points = series(0, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).points;
 
-  it("von inklusive, bis exklusive", () => {
-    const teil = ausschnitt(werte, T + 2 * INTERVALL, T + 5 * INTERVALL);
-    expect(teil.map((m) => m.wert)).toEqual([2, 3, 4]);
+  it("start inclusive, end exclusive", () => {
+    const range = pointsInRange(points, T + 2 * INTERVAL, T + 5 * INTERVAL);
+    expect(range.map((p) => p.value)).toEqual([2, 3, 4]);
   });
 
-  it("Grenzen zwischen zwei Werten", () => {
-    const teil = ausschnitt(
-      werte,
-      T + 2 * INTERVALL + 1,
-      T + 5 * INTERVALL - 1,
+  it("bounds between two values", () => {
+    const range = pointsInRange(
+      points,
+      T + 2 * INTERVAL + 1,
+      T + 5 * INTERVAL - 1,
     );
-    expect(teil.map((m) => m.wert)).toEqual([3, 4]);
+    expect(range.map((p) => p.value)).toEqual([3, 4]);
   });
 
-  it("Bereich ausserhalb der Daten ist leer", () => {
-    expect(ausschnitt(werte, T - 10 * INTERVALL, T)).toEqual([]);
-    expect(ausschnitt(werte, T + 100 * INTERVALL, T + 200 * INTERVALL)).toEqual(
-      [],
-    );
+  it("range outside the data is empty", () => {
+    expect(pointsInRange(points, T - 10 * INTERVAL, T)).toEqual([]);
+    expect(
+      pointsInRange(points, T + 100 * INTERVAL, T + 200 * INTERVAL),
+    ).toEqual([]);
   });
 
-  it("binäre Suche stimmt mit linearer Suche überein", () => {
+  it("binary search matches linear search", () => {
     // every time from before the first to after the last value, also between values
-    for (let ts = T - INTERVALL; ts <= T + 11 * INTERVALL; ts += 300) {
-      const linear = werte.findIndex((m) => m.ts >= ts);
-      expect(ersterIndexAb(werte, ts)).toBe(
-        linear === -1 ? werte.length : linear,
+    for (let ts = T - INTERVAL; ts <= T + 11 * INTERVAL; ts += 300) {
+      const linear = points.findIndex((p) => p.ts >= ts);
+      expect(firstIndexFrom(points, ts)).toBe(
+        linear === -1 ? points.length : linear,
       );
     }
   });

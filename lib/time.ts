@@ -13,7 +13,7 @@ function zurichOffset(date: Date): string {
 
 // turns a time without time zone (like "2019-03-01T00:00:00") into unix seconds,
 // reading it as swiss local time. returns NaN for invalid input
-export function zurichZuUnix(localTime: string): number {
+export function zurichToUnix(localTime: string): number {
   const date = new Date(`${localTime}Z`);
   if (Number.isNaN(date.getTime())) {
     return NaN;

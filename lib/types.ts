@@ -1,33 +1,36 @@
-// the client only wants these two sensors, all others are out of scope
-export const SENSOREN = ["ID742", "ID735"] as const;
-export type SensorId = (typeof SENSOREN)[number];
+// consumption = power drawn from the grid, feedIn = solar power fed into the grid
+export type Direction = "consumption" | "feedIn";
 
-// bezug = power from the grid, einspeisung = solar power fed into the grid
-export type Richtung = "bezug" | "einspeisung";
+// the client only wants these two sensors, all others are out of scope
+export const SENSOR_IDS = {
+  consumption: "ID742",
+  feedIn: "ID735",
+} as const satisfies Record<Direction, string>;
+export type SensorId = (typeof SENSOR_IDS)[Direction];
 
 // one measurement, ts is in unix seconds
-export interface Messwert {
+export interface DataPoint {
   ts: number;
-  wert: number; // kWh
+  value: number; // kWh
 }
 
-// verbrauch = usage per 15 min (sdat), zaehlerstand = absolute meter reading (esl)
-export interface Serie {
+// usage = energy per 15 min (sdat), meterReading = absolute meter reading (esl)
+export interface Series {
   sensorId: string; // e.g. "ID742", just extra info
-  richtung: Richtung;
-  art: "verbrauch" | "zaehlerstand";
-  werte: Messwert[]; // sorted by ts
-  erstellt?: number; // creation time of the file (unix seconds), newer files win on duplicates
+  direction: Direction;
+  kind: "usage" | "meterReading";
+  points: DataPoint[]; // sorted by ts
+  createdAt?: number; // creation time of the file (unix seconds), newer files win on duplicates
 }
 
 // a file that could not be read and why
-export interface Fehler {
-  datei: string;
-  meldung: string;
+export interface FileError {
+  file: string;
+  message: string;
 }
 
 // a valid file from a sensor the client wants us to ignore, e.g. ID26256
-export interface Ignoriert {
-  datei: string;
+export interface IgnoredFile {
+  file: string;
   sensorId: string;
 }

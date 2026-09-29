@@ -1,12 +1,12 @@
-import type { Messwert, Serie } from "@/lib/types";
+import type { DataPoint, Series } from "@/lib/types";
 
 // sdat values are 15 min apart, in seconds
-export const INTERVALL = 15 * 60;
+export const INTERVAL = 15 * 60;
 
-// a time range without any values, von is included and bis is not
-export interface Luecke {
-  von: number;
-  bis: number;
+// a time range without any values, start is included and end is not
+export interface Gap {
+  start: number;
+  end: number;
 }
 
 // puts all series of one sensor into a single list, one value per timestamp
@@ -14,81 +14,80 @@ export interface Luecke {
 // the same timestamp often shows up in several files,
 // then the value from the file with the newest creation date wins
 // (sdat placeholders with condition 21 were already removed by the parser)
-export function zusammenfuehren(serien: Serie[]): Messwert[] {
+export function mergeSeries(series: Series[]): DataPoint[] {
   // timestamp -> best value so far and the creation date of its file
-  const besteWerte = new Map<number, { wert: number; erstellt: number }>();
+  const best = new Map<number, { value: number; createdAt: number }>();
 
-  for (const serie of serien) {
-    const erstellt = serie.erstellt ?? 0;
-
-    for (const messwert of serie.werte) {
-      const bisher = besteWerte.get(messwert.ts);
+  for (const { points, createdAt = 0 } of series) {
+    for (const point of points) {
+      const current = best.get(point.ts);
 
       // take the value if we have none yet or if this file is newer
-      if (bisher === undefined || erstellt > bisher.erstellt) {
-        besteWerte.set(messwert.ts, { wert: messwert.wert, erstellt });
+      if (current === undefined || createdAt > current.createdAt) {
+        best.set(point.ts, { value: point.value, createdAt });
       }
     }
   }
 
   // turn the map back into a normal list
-  const werte: Messwert[] = [];
-  for (const [ts, eintrag] of besteWerte) {
-    werte.push({ ts, wert: eintrag.wert });
+  const merged: DataPoint[] = [];
+  for (const [ts, entry] of best) {
+    merged.push({ ts, value: entry.value });
   }
 
-  werte.sort((a, b) => a.ts - b.ts);
-  return werte;
+  merged.sort((a, b) => a.ts - b.ts);
+  return merged;
 }
 
 // finds all places where values are missing
-// werte must be sorted by ts
-export function findeLuecken(werte: Messwert[]): Luecke[] {
-  const luecken: Luecke[] = [];
+// points must be sorted by ts
+export function findGaps(points: DataPoint[]): Gap[] {
+  const gaps: Gap[] = [];
 
-  for (let i = 1; i < werte.length; i++) {
+  for (let i = 1; i < points.length; i++) {
     // the next value should come exactly 15 min after the one before
-    const erwartet = werte[i - 1].ts + INTERVALL;
+    const expected = points[i - 1].ts + INTERVAL;
 
-    if (werte[i].ts > erwartet) {
-      luecken.push({ von: erwartet, bis: werte[i].ts });
+    if (points[i].ts > expected) {
+      gaps.push({ start: expected, end: points[i].ts });
     }
   }
 
-  return luecken;
+  return gaps;
 }
 
-// returns the index of the first value with a ts >= the given time
-// if there is none, it returns werte.length
+// returns the index of the first point with a ts >= the given time
+// if there is none, it returns points.length
 // uses binary search: look at the middle, then keep only the half that can contain the answer
 // so for 128'000 values we only need about 17 steps instead of going through all of them
-export function ersterIndexAb(werte: Messwert[], ts: number): number {
-  let links = 0;
-  let rechts = werte.length;
+export function firstIndexFrom(points: DataPoint[], ts: number): number {
+  let low = 0;
+  let high = points.length;
 
-  while (links < rechts) {
-    const mitte = Math.floor((links + rechts) / 2);
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
 
-    if (werte[mitte].ts < ts) {
+    if (points[mid].ts < ts) {
       // the middle is too early, so the answer is on the right side
-      links = mitte + 1;
+      low = mid + 1;
     } else {
       // the middle could be the answer, but maybe there is an earlier one on the left
-      rechts = mitte;
+      high = mid;
     }
   }
 
-  return links;
+  return low;
 }
 
-// returns all values with von <= ts < bis
-// werte must be sorted by ts
-export function ausschnitt(
-  werte: Messwert[],
-  von: number,
-  bis: number,
-): Messwert[] {
-  const start = ersterIndexAb(werte, von);
-  const ende = ersterIndexAb(werte, bis);
-  return werte.slice(start, ende);
+// returns all points with start <= ts < end
+// points must be sorted by ts
+export function pointsInRange(
+  points: DataPoint[],
+  start: number,
+  end: number,
+): DataPoint[] {
+  return points.slice(
+    firstIndexFrom(points, start),
+    firstIndexFrom(points, end),
+  );
 }

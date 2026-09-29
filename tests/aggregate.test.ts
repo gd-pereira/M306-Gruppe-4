@@ -1,199 +1,199 @@
 import { describe, expect, it } from "vitest";
-import { STUFEN, vorberechnen, zusammenfassen } from "@/lib/aggregate";
-import { INTERVALL } from "@/lib/timeseries";
-import type { Messwert } from "@/lib/types";
-import { zurichZuUnix } from "@/lib/zeit";
+import { aggregate, aggregateAllLevels, ZOOM_LEVELS } from "@/lib/aggregate";
+import { zurichToUnix } from "@/lib/time";
+import { INTERVAL } from "@/lib/timeseries";
+import type { DataPoint } from "@/lib/types";
 
 // midnight swiss time of that day
-function tag(datum: string): number {
-  return zurichZuUnix(`${datum}T00:00:00`);
+function day(date: string): number {
+  return zurichToUnix(`${date}T00:00:00`);
 }
 
-// a 15 min value from von (included) to bis (not included), all with the same value
-function reihe(von: number, bis: number, wert = 1): Messwert[] {
-  const werte: Messwert[] = [];
-  for (let ts = von; ts < bis; ts += INTERVALL) {
-    werte.push({ ts, wert });
+// 15 min values from start (included) to end (not included), all with the same value
+function series(start: number, end: number, value = 1): DataPoint[] {
+  const points: DataPoint[] = [];
+  for (let ts = start; ts < end; ts += INTERVAL) {
+    points.push({ ts, value });
   }
-  return werte;
+  return points;
 }
 
-describe("zusammenfassen Verbrauch", () => {
-  it("15 min bleibt gleich", () => {
-    const werte = reihe(tag("2019-03-11"), tag("2019-03-12"), 0.5);
-    expect(zusammenfassen(werte, "verbrauch", "15min")).toEqual(werte);
+describe("aggregate usage", () => {
+  it("15 min stays the same", () => {
+    const points = series(day("2019-03-11"), day("2019-03-12"), 0.5);
+    expect(aggregate(points, "usage", "15min")).toEqual(points);
   });
 
-  it("Stunde = Summe von 4 Werten", () => {
-    const werte = reihe(tag("2019-03-11"), tag("2019-03-11") + 2 * 3600);
-    expect(zusammenfassen(werte, "verbrauch", "stunde")).toEqual([
-      { ts: tag("2019-03-11"), wert: 4 },
-      { ts: tag("2019-03-11") + 3600, wert: 4 },
+  it("hour = sum of 4 values", () => {
+    const points = series(day("2019-03-11"), day("2019-03-11") + 2 * 3600);
+    expect(aggregate(points, "usage", "hour")).toEqual([
+      { ts: day("2019-03-11"), value: 4 },
+      { ts: day("2019-03-11") + 3600, value: 4 },
     ]);
   });
 
-  it("normaler Tag hat 96 Werte", () => {
-    const werte = reihe(tag("2019-03-11"), tag("2019-03-13"));
-    expect(zusammenfassen(werte, "verbrauch", "tag")).toEqual([
-      { ts: tag("2019-03-11"), wert: 96 },
-      { ts: tag("2019-03-12"), wert: 96 },
+  it("a normal day has 96 values", () => {
+    const points = series(day("2019-03-11"), day("2019-03-13"));
+    expect(aggregate(points, "usage", "day")).toEqual([
+      { ts: day("2019-03-11"), value: 96 },
+      { ts: day("2019-03-12"), value: 96 },
     ]);
   });
 
-  it("Zeitumstellung im März: der Tag hat nur 92 Werte", () => {
-    const werte = reihe(tag("2019-03-30"), tag("2019-04-01"));
-    expect(zusammenfassen(werte, "verbrauch", "tag")).toEqual([
-      { ts: tag("2019-03-30"), wert: 96 },
-      { ts: tag("2019-03-31"), wert: 92 },
+  it("clock change in march: the day only has 92 values", () => {
+    const points = series(day("2019-03-30"), day("2019-04-01"));
+    expect(aggregate(points, "usage", "day")).toEqual([
+      { ts: day("2019-03-30"), value: 96 },
+      { ts: day("2019-03-31"), value: 92 },
     ]);
   });
 
-  it("Zeitumstellung im Oktober: der Tag hat 100 Werte", () => {
-    const werte = reihe(tag("2019-10-26"), tag("2019-10-28"));
-    expect(zusammenfassen(werte, "verbrauch", "tag")).toEqual([
-      { ts: tag("2019-10-26"), wert: 96 },
-      { ts: tag("2019-10-27"), wert: 100 },
+  it("clock change in october: the day has 100 values", () => {
+    const points = series(day("2019-10-26"), day("2019-10-28"));
+    expect(aggregate(points, "usage", "day")).toEqual([
+      { ts: day("2019-10-26"), value: 96 },
+      { ts: day("2019-10-27"), value: 100 },
     ]);
   });
 
-  it("Stunden bleiben bei der Zeitumstellung 4 Werte lang", () => {
-    const werte = reihe(tag("2019-10-27"), tag("2019-10-28"));
-    const stunden = zusammenfassen(werte, "verbrauch", "stunde");
-    expect(stunden).toHaveLength(25);
-    expect(stunden.every((s) => s.wert === 4)).toBe(true);
+  it("hours stay 4 values long during the clock change", () => {
+    const points = series(day("2019-10-27"), day("2019-10-28"));
+    const hours = aggregate(points, "usage", "hour");
+    expect(hours).toHaveLength(25);
+    expect(hours.every((h) => h.value === 4)).toBe(true);
   });
 
-  it("Woche beginnt am Montag", () => {
+  it("week starts on monday", () => {
     // 2019-03-11 is a monday, 2019-03-24 a sunday
-    const werte = reihe(tag("2019-03-11"), tag("2019-03-25"));
-    expect(zusammenfassen(werte, "verbrauch", "woche")).toEqual([
-      { ts: tag("2019-03-11"), wert: 7 * 96 },
-      { ts: tag("2019-03-18"), wert: 7 * 96 },
+    const points = series(day("2019-03-11"), day("2019-03-25"));
+    expect(aggregate(points, "usage", "week")).toEqual([
+      { ts: day("2019-03-11"), value: 7 * 96 },
+      { ts: day("2019-03-18"), value: 7 * 96 },
     ]);
   });
 
-  it("Woche mit Zeitumstellung hat 4 Werte weniger", () => {
+  it("week with clock change has 4 values less", () => {
     // 2019-03-25 is the monday after the change on sunday 2019-03-31
-    const werte = reihe(tag("2019-03-25"), tag("2019-04-01"));
-    expect(zusammenfassen(werte, "verbrauch", "woche")).toEqual([
-      { ts: tag("2019-03-25"), wert: 7 * 96 - 4 },
+    const points = series(day("2019-03-25"), day("2019-04-01"));
+    expect(aggregate(points, "usage", "week")).toEqual([
+      { ts: day("2019-03-25"), value: 7 * 96 - 4 },
     ]);
   });
 
-  it("Monat über den Jahreswechsel", () => {
-    const werte = reihe(tag("2018-12-01"), tag("2019-02-01"));
-    expect(zusammenfassen(werte, "verbrauch", "monat")).toEqual([
-      { ts: tag("2018-12-01"), wert: 31 * 96 },
-      { ts: tag("2019-01-01"), wert: 31 * 96 },
+  it("month across the new year", () => {
+    const points = series(day("2018-12-01"), day("2019-02-01"));
+    expect(aggregate(points, "usage", "month")).toEqual([
+      { ts: day("2018-12-01"), value: 31 * 96 },
+      { ts: day("2019-01-01"), value: 31 * 96 },
     ]);
   });
 
-  it("März 2019 hat wegen der Zeitumstellung 4 Werte weniger", () => {
-    const werte = reihe(tag("2019-03-01"), tag("2019-04-01"));
-    expect(zusammenfassen(werte, "verbrauch", "monat")).toEqual([
-      { ts: tag("2019-03-01"), wert: 31 * 96 - 4 },
+  it("march 2019 has 4 values less because of the clock change", () => {
+    const points = series(day("2019-03-01"), day("2019-04-01"));
+    expect(aggregate(points, "usage", "month")).toEqual([
+      { ts: day("2019-03-01"), value: 31 * 96 - 4 },
     ]);
   });
 
-  it("Lücken: Abschnitte ohne Werte fehlen einfach", () => {
-    const werte = [
-      ...reihe(tag("2019-03-11"), tag("2019-03-12")),
-      ...reihe(tag("2019-03-14"), tag("2019-03-15")),
+  it("gaps: buckets without values are just missing", () => {
+    const points = [
+      ...series(day("2019-03-11"), day("2019-03-12")),
+      ...series(day("2019-03-14"), day("2019-03-15")),
     ];
-    const tage = zusammenfassen(werte, "verbrauch", "tag");
-    expect(tage.map((t) => t.ts)).toEqual([
-      tag("2019-03-11"),
-      tag("2019-03-14"),
+    const days = aggregate(points, "usage", "day");
+    expect(days.map((d) => d.ts)).toEqual([
+      day("2019-03-11"),
+      day("2019-03-14"),
     ]);
   });
 
-  it("rundet Kommafehler weg", () => {
-    const werte = reihe(
-      tag("2019-03-11"),
-      tag("2019-03-11") + 3 * INTERVALL,
+  it("rounds away float errors", () => {
+    const points = series(
+      day("2019-03-11"),
+      day("2019-03-11") + 3 * INTERVAL,
       0.1,
     );
-    expect(zusammenfassen(werte, "verbrauch", "stunde")).toEqual([
-      { ts: tag("2019-03-11"), wert: 0.3 },
+    expect(aggregate(points, "usage", "hour")).toEqual([
+      { ts: day("2019-03-11"), value: 0.3 },
     ]);
   });
 
-  it("ohne Werte gibt es kein Ergebnis", () => {
-    expect(zusammenfassen([], "verbrauch", "tag")).toEqual([]);
+  it("no values give no result", () => {
+    expect(aggregate([], "usage", "day")).toEqual([]);
   });
 });
 
-describe("zusammenfassen Zählerstand", () => {
-  // a reading belongs to the end of its 15 min interval, like in berechneZaehlerstand
-  function staende(von: number, bis: number): Messwert[] {
-    return reihe(von, bis).map((m, i) => ({
-      ts: m.ts + INTERVALL,
-      wert: 1000 + i + 1,
+describe("aggregate meter reading", () => {
+  // a reading belongs to the end of its 15 min interval, like in computeMeterReadings
+  function readings(start: number, end: number): DataPoint[] {
+    return series(start, end).map((p, i) => ({
+      ts: p.ts + INTERVAL,
+      value: 1000 + i + 1,
     }));
   }
 
-  it("nimmt den letzten Wert, nicht die Summe", () => {
-    const werte = staende(tag("2019-03-11"), tag("2019-03-11") + 3600);
-    expect(zusammenfassen(werte, "zaehlerstand", "stunde")).toEqual([
-      { ts: tag("2019-03-11"), wert: 1004 },
+  it("takes the last value, not the sum", () => {
+    const points = readings(day("2019-03-11"), day("2019-03-11") + 3600);
+    expect(aggregate(points, "meterReading", "hour")).toEqual([
+      { ts: day("2019-03-11"), value: 1004 },
     ]);
   });
 
-  it("der Stand um 00:00 gehört zum Tag davor", () => {
-    const werte = staende(tag("2019-03-11"), tag("2019-03-13"));
-    expect(zusammenfassen(werte, "zaehlerstand", "tag")).toEqual([
-      { ts: tag("2019-03-11"), wert: 1096 },
-      { ts: tag("2019-03-12"), wert: 1192 },
+  it("the reading at 00:00 belongs to the day before", () => {
+    const points = readings(day("2019-03-11"), day("2019-03-13"));
+    expect(aggregate(points, "meterReading", "day")).toEqual([
+      { ts: day("2019-03-11"), value: 1096 },
+      { ts: day("2019-03-12"), value: 1192 },
     ]);
   });
 
-  it("Zeitumstellung: letzter Stand des Tages mit 92 bzw. 100 Werten", () => {
-    const maerz = staende(tag("2019-03-31"), tag("2019-04-01"));
-    expect(zusammenfassen(maerz, "zaehlerstand", "tag")).toEqual([
-      { ts: tag("2019-03-31"), wert: 1092 },
+  it("clock change: last reading of the day with 92 or 100 values", () => {
+    const march = readings(day("2019-03-31"), day("2019-04-01"));
+    expect(aggregate(march, "meterReading", "day")).toEqual([
+      { ts: day("2019-03-31"), value: 1092 },
     ]);
 
-    const oktober = staende(tag("2019-10-27"), tag("2019-10-28"));
-    expect(zusammenfassen(oktober, "zaehlerstand", "tag")).toEqual([
-      { ts: tag("2019-10-27"), wert: 1100 },
+    const october = readings(day("2019-10-27"), day("2019-10-28"));
+    expect(aggregate(october, "meterReading", "day")).toEqual([
+      { ts: day("2019-10-27"), value: 1100 },
     ]);
   });
 
-  it("ESL-Stand vom 1. Februar ist der Endstand vom Januar", () => {
-    const esl: Messwert[] = [
-      { ts: tag("2019-01-01"), wert: 19216.2 },
-      { ts: tag("2019-02-01"), wert: 21869.2 },
-      { ts: tag("2019-03-01"), wert: 23468.7 },
+  it("the ESL reading of 1 february is the final reading of january", () => {
+    const esl: DataPoint[] = [
+      { ts: day("2019-01-01"), value: 19216.2 },
+      { ts: day("2019-02-01"), value: 21869.2 },
+      { ts: day("2019-03-01"), value: 23468.7 },
     ];
-    expect(zusammenfassen(esl, "zaehlerstand", "monat")).toEqual([
-      { ts: tag("2018-12-01"), wert: 19216.2 },
-      { ts: tag("2019-01-01"), wert: 21869.2 },
-      { ts: tag("2019-02-01"), wert: 23468.7 },
+    expect(aggregate(esl, "meterReading", "month")).toEqual([
+      { ts: day("2018-12-01"), value: 19216.2 },
+      { ts: day("2019-01-01"), value: 21869.2 },
+      { ts: day("2019-02-01"), value: 23468.7 },
     ]);
   });
 });
 
-describe("vorberechnen", () => {
-  it("liefert alle Zoomstufen", () => {
-    const werte = reihe(tag("2019-03-01"), tag("2019-04-01"));
-    const stufen = vorberechnen(werte, "verbrauch");
+describe("aggregateAllLevels", () => {
+  it("returns all zoom levels", () => {
+    const points = series(day("2019-03-01"), day("2019-04-01"));
+    const levels = aggregateAllLevels(points, "usage");
 
-    expect(Object.keys(stufen)).toEqual([...STUFEN]);
-    expect(stufen["15min"]).toHaveLength(31 * 96 - 4);
-    expect(stufen.stunde).toHaveLength(31 * 24 - 1);
-    expect(stufen.tag).toHaveLength(31);
-    expect(stufen.monat).toEqual([
-      { ts: tag("2019-03-01"), wert: 31 * 96 - 4 },
+    expect(Object.keys(levels)).toEqual([...ZOOM_LEVELS]);
+    expect(levels["15min"]).toHaveLength(31 * 96 - 4);
+    expect(levels.hour).toHaveLength(31 * 24 - 1);
+    expect(levels.day).toHaveLength(31);
+    expect(levels.month).toEqual([
+      { ts: day("2019-03-01"), value: 31 * 96 - 4 },
     ]);
   });
 
-  it("die Summe bleibt auf jeder Stufe gleich", () => {
-    const werte = reihe(tag("2019-01-01"), tag("2019-12-31"), 0.25);
-    const stufen = vorberechnen(werte, "verbrauch");
-    const summe = (liste: Messwert[]) => liste.reduce((s, m) => s + m.wert, 0);
+  it("the sum stays the same on every level", () => {
+    const points = series(day("2019-01-01"), day("2019-12-31"), 0.25);
+    const levels = aggregateAllLevels(points, "usage");
+    const sum = (list: DataPoint[]) => list.reduce((s, p) => s + p.value, 0);
 
-    for (const stufe of STUFEN) {
-      expect(summe(stufen[stufe])).toBeCloseTo(werte.length * 0.25, 6);
+    for (const level of ZOOM_LEVELS) {
+      expect(sum(levels[level])).toBeCloseTo(points.length * 0.25, 6);
     }
   });
 });

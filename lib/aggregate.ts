@@ -1,26 +1,22 @@
-import { INTERVALL } from "@/lib/timeseries";
-import type { Messwert, Serie } from "@/lib/types";
-import { zurichZuUnix } from "@/lib/zeit";
+import { roundKwh } from "@/lib/math";
+import { zurichToUnix } from "@/lib/time";
+import { INTERVAL } from "@/lib/timeseries";
+import type { DataPoint, Series } from "@/lib/types";
 
 // zoom levels of the chart, from fine to coarse
-export const STUFEN = ["15min", "stunde", "tag", "woche", "monat"] as const;
-export type Stufe = (typeof STUFEN)[number];
+export const ZOOM_LEVELS = ["15min", "hour", "day", "week", "month"] as const;
+export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
 
-// a time section, von is included and bis is not (unix seconds)
-interface Abschnitt {
-  von: number;
-  bis: number;
+// a time bucket, start is included and end is not (unix seconds)
+interface Bucket {
+  start: number;
+  end: number;
 }
 
-const STUNDE = 60 * 60;
-
-// adding up floats gives things like 19216.199999, so we round to 4 decimals
-function runde(n: number): number {
-  return Math.round(n * 10000) / 10000;
-}
+const HOUR = 60 * 60;
 
 // year, month (1-12) and day of a moment in swiss local time
-function zurichDatum(ts: number): { jahr: number; monat: number; tag: number } {
+function zurichDate(ts: number): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Europe/Zurich",
     year: "numeric",
@@ -28,103 +24,103 @@ function zurichDatum(ts: number): { jahr: number; monat: number; tag: number } {
     day: "numeric",
   }).formatToParts(new Date(ts * 1000));
 
-  const teil = (type: string) =>
-    Number(parts.find((part) => part.type === type)?.value);
-  return { jahr: teil("year"), monat: teil("month"), tag: teil("day") };
+  const part = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value);
+  return { year: part("year"), month: part("month"), day: part("day") };
 }
 
 // unix seconds of midnight swiss time on that day
 // Date.UTC handles overflow, so day 32 or month 13 just roll over to the next month or year
-function mitternacht(jahr: number, monat: number, tag: number): number {
-  const iso = new Date(Date.UTC(jahr, monat - 1, tag))
+function zurichMidnight(year: number, month: number, day: number): number {
+  const iso = new Date(Date.UTC(year, month - 1, day))
     .toISOString()
     .slice(0, 10);
-  return zurichZuUnix(`${iso}T00:00:00`);
+  return zurichToUnix(`${iso}T00:00:00`);
 }
 
-// the section of the given zoom level that contains ts
+// the bucket of the given zoom level that contains ts
 // hours can be calculated directly because the swiss offset is always a full hour,
 // days, weeks and months start at midnight swiss time and are 23 or 25 hours longer or shorter
 // when the clock changes, so for those we go through the calendar
-function abschnittVon(ts: number, stufe: Stufe): Abschnitt {
-  if (stufe === "15min" || stufe === "stunde") {
-    const laenge = stufe === "15min" ? INTERVALL : STUNDE;
-    const von = Math.floor(ts / laenge) * laenge;
-    return { von, bis: von + laenge };
+function bucketAt(ts: number, level: ZoomLevel): Bucket {
+  if (level === "15min" || level === "hour") {
+    const length = level === "15min" ? INTERVAL : HOUR;
+    const start = Math.floor(ts / length) * length;
+    return { start, end: start + length };
   }
 
-  const { jahr, monat, tag } = zurichDatum(ts);
+  const { year, month, day } = zurichDate(ts);
 
-  if (stufe === "tag") {
+  if (level === "day") {
     return {
-      von: mitternacht(jahr, monat, tag),
-      bis: mitternacht(jahr, monat, tag + 1),
+      start: zurichMidnight(year, month, day),
+      end: zurichMidnight(year, month, day + 1),
     };
   }
 
-  if (stufe === "woche") {
+  if (level === "week") {
     // weeks start on monday, getUTCDay gives 0 for sunday
-    const wochentag = new Date(Date.UTC(jahr, monat - 1, tag)).getUTCDay();
-    const montag = tag - ((wochentag + 6) % 7);
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    const monday = day - ((weekday + 6) % 7);
     return {
-      von: mitternacht(jahr, monat, montag),
-      bis: mitternacht(jahr, monat, montag + 7),
+      start: zurichMidnight(year, month, monday),
+      end: zurichMidnight(year, month, monday + 7),
     };
   }
 
   return {
-    von: mitternacht(jahr, monat, 1),
-    bis: mitternacht(jahr, monat + 1, 1),
+    start: zurichMidnight(year, month, 1),
+    end: zurichMidnight(year, month + 1, 1),
   };
 }
 
-// combines the values per section of the zoom level, ts of the result is the start of the section
-// verbrauch: sum of all values in the section
-// zaehlerstand: the last reading in the section. a reading belongs to the end of its interval
-// (see berechneZaehlerstand), so a reading at exactly 00:00 is the end of the day before
-// werte must be sorted by ts
-export function zusammenfassen(
-  werte: Messwert[],
-  art: Serie["art"],
-  stufe: Stufe,
-): Messwert[] {
-  const ergebnis: Messwert[] = [];
-  // readings are shifted by one second so a reading on the border counts to the section before
-  const verschiebung = art === "zaehlerstand" ? 1 : 0;
+// combines the points per bucket of the zoom level, ts of the result is the start of the bucket
+// usage: sum of all values in the bucket
+// meterReading: the last reading in the bucket. a reading belongs to the end of its interval
+// (see computeMeterReadings), so a reading at exactly 00:00 is the end of the day before
+// points must be sorted by ts
+export function aggregate(
+  points: DataPoint[],
+  kind: Series["kind"],
+  level: ZoomLevel,
+): DataPoint[] {
+  const result: DataPoint[] = [];
+  // readings are shifted by one second so a reading on the border counts to the bucket before
+  const shift = kind === "meterReading" ? 1 : 0;
 
-  let aktuell: Abschnitt | undefined;
-  let wert = 0;
+  let bucket: Bucket | undefined;
+  let value = 0;
 
-  for (const messwert of werte) {
-    const ts = messwert.ts - verschiebung;
+  for (const point of points) {
+    const ts = point.ts - shift;
 
-    // only ask the calendar when we leave the current section, not for every value
-    if (aktuell === undefined || ts >= aktuell.bis) {
-      if (aktuell !== undefined) {
-        ergebnis.push({ ts: aktuell.von, wert: runde(wert) });
+    // only ask the calendar when we leave the current bucket, not for every value
+    if (bucket === undefined || ts >= bucket.end) {
+      if (bucket !== undefined) {
+        result.push({ ts: bucket.start, value: roundKwh(value) });
       }
-      aktuell = abschnittVon(ts, stufe);
-      wert = 0;
+      bucket = bucketAt(ts, level);
+      value = 0;
     }
 
-    wert = art === "verbrauch" ? wert + messwert.wert : messwert.wert;
+    value = kind === "usage" ? value + point.value : point.value;
   }
 
-  if (aktuell !== undefined) {
-    ergebnis.push({ ts: aktuell.von, wert: runde(wert) });
+  if (bucket !== undefined) {
+    result.push({ ts: bucket.start, value: roundKwh(value) });
   }
 
-  return ergebnis;
+  return result;
 }
 
 // calculates all zoom levels at once, so switching in the chart needs no calculation
-export function vorberechnen(
-  werte: Messwert[],
-  art: Serie["art"],
-): Record<Stufe, Messwert[]> {
-  const stufen = {} as Record<Stufe, Messwert[]>;
-  for (const stufe of STUFEN) {
-    stufen[stufe] = zusammenfassen(werte, art, stufe);
+export function aggregateAllLevels(
+  points: DataPoint[],
+  kind: Series["kind"],
+): Record<ZoomLevel, DataPoint[]> {
+  const levels = {} as Record<ZoomLevel, DataPoint[]>;
+  for (const level of ZOOM_LEVELS) {
+    levels[level] = aggregate(points, kind, level);
   }
-  return stufen;
+  return levels;
 }
