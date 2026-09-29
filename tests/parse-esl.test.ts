@@ -37,6 +37,17 @@ describe("parseEsl", () => {
     ]);
   });
 
+  it("liest das Erstellungsdatum der Datei", () => {
+    const result = parseFixture("esl-2019-03.xml");
+    if (!result.ok) throw new Error(result.fehler.meldung);
+
+    // created ="2019-03-14T09:34:00" in swiss winter time (UTC+1)
+    const erstellt = Date.UTC(2019, 2, 14, 8, 34) / 1000;
+    for (const serie of result.serien) {
+      expect(serie.erstellt).toBe(erstellt);
+    }
+  });
+
   it("überspringt Zeitpunkte mit fehlenden OBIS-Codes", () => {
     const result = parseFixture("esl-teilweise.xml");
     if (!result.ok) throw new Error(result.fehler.meldung);

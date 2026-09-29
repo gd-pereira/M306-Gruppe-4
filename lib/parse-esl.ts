@@ -8,6 +8,7 @@ export type EslErgebnis =
 
 // only the parts of the esl file we actually read
 interface EslRoot {
+  Header?: { created?: string };
   Meter?: {
     TimePeriod?: {
       end?: string;
@@ -85,6 +86,11 @@ export function parseEsl(xml: string, datei: string): EslErgebnis {
   bezug.sort((a, b) => a.ts - b.ts);
   einspeisung.sort((a, b) => a.ts - b.ts);
 
+  // the same readings show up in several esl files, the newest file wins (see timeseries.ts)
+  // "created" is swiss local time like "end", missing counts as oldest
+  const created = zurichZuUnix(root.Header?.created ?? "");
+  const erstellt = Number.isNaN(created) ? 0 : created;
+
   // esl has no sensor id, so we use the ids from the mapping table
   const serien: Serie[] = [];
   if (bezug.length > 0) {
@@ -93,6 +99,7 @@ export function parseEsl(xml: string, datei: string): EslErgebnis {
       richtung: "bezug",
       art: "zaehlerstand",
       werte: bezug,
+      erstellt,
     });
   }
   if (einspeisung.length > 0) {
@@ -101,6 +108,7 @@ export function parseEsl(xml: string, datei: string): EslErgebnis {
       richtung: "einspeisung",
       art: "zaehlerstand",
       werte: einspeisung,
+      erstellt,
     });
   }
 
