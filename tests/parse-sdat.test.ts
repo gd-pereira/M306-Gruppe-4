@@ -43,6 +43,57 @@ describe("parseSdat", () => {
     expect(werte[95]).toEqual({ ts: start + 95 * 900, wert: 0.6 });
   });
 
+  it("liest das Erstellungsdatum der Datei", () => {
+    const result = parseFixture("sdat-ID742.xml");
+    if (!result.ok) throw new Error(result.fehler.meldung);
+
+    // <rsm:Creation>2019-03-13T08:31:00Z</rsm:Creation>
+    expect(result.serie.erstellt).toBe(Date.UTC(2019, 2, 13, 8, 31) / 1000);
+  });
+
+  // condition 21 = placeholder 0, the client wants the real value from the newer file instead
+  describe("Platzhalter (Condition 21)", () => {
+    const xml = readFileSync("tests/fixtures/sdat-ID742.xml", "utf-8");
+    const platzhalter = "</rsm:Volume><rsm:Condition>21</rsm:Condition>";
+
+    it("werden übersprungen", () => {
+      // only the first observation becomes a placeholder
+      const result = parseSdat(
+        xml.replace("</rsm:Volume>", platzhalter),
+        "platzhalter.xml",
+      );
+      if (!result.ok) throw new Error(result.fehler.meldung);
+
+      const start = Date.UTC(2019, 2, 11, 23, 0, 0) / 1000;
+      expect(result.serie.werte).toHaveLength(95);
+      expect(result.serie.werte[0]).toEqual({ ts: start + 900, wert: 2.7 });
+    });
+
+    it("Datei nur mit Platzhaltern ist gültig, aber leer", () => {
+      const result = parseSdat(
+        xml.replaceAll("</rsm:Volume>", platzhalter),
+        "nur-platzhalter.xml",
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.serie.werte).toEqual([]);
+    });
+
+    it("andere Conditions (z.B. 56 = Ersatzwert) sind echte Werte", () => {
+      const result = parseSdat(
+        xml.replace(
+          "</rsm:Volume>",
+          "</rsm:Volume><rsm:Condition>56</rsm:Condition>",
+        ),
+        "ersatzwert.xml",
+      );
+      if (!result.ok) throw new Error(result.fehler.meldung);
+
+      expect(result.serie.werte).toHaveLength(96);
+    });
+  });
+
   it("kaputte Datei ergibt Fehler statt Absturz", () => {
     const result = parseFixture("sdat-kaputt.xml");
 

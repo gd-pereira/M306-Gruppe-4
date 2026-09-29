@@ -17,6 +17,7 @@ export interface Serie {
   richtung: Richtung;
   art: "verbrauch" | "zaehlerstand";
   werte: Messwert[]; // sorted by ts
+  erstellt?: number; // creation time of the file (unix seconds), newer files win on duplicates
 }
 
 // a file that could not be read and why
