@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  ArrowRight,
-  Check,
-  CircleAlert,
-  Eye,
-  EyeOff,
-  LoaderCircle,
-  Lock,
-  LockOpen,
-} from "lucide-react";
+import { Check, CircleAlert, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -31,7 +22,7 @@ const FEATURES = [
 ];
 
 // the form is centred by its height without the error row, so the error only pushes the button down
-const FORM_HEIGHT = 310;
+const FORM_HEIGHT = 206;
 
 export function LoginScreen() {
   return (
@@ -211,37 +202,16 @@ function LoginForm() {
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col">
-      <Rise
-        index={1}
-        className="relative flex size-12 items-center justify-center overflow-hidden rounded-[14px] bg-card shadow-[0_8px_24px_rgb(0_0_0/0.06),0_1px_2px_rgb(0_0_0/0.04)]"
-      >
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.span
-            key={status === "open" ? "open" : "locked"}
-            initial={{ opacity: 0, scale: 0.6 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.6 }}
-            transition={{ duration: 0.25, ease: EASE_OUT }}
-          >
-            {status === "open" ? (
-              <LockOpen className="size-5 text-foreground" aria-hidden />
-            ) : (
-              <Lock className="size-5 text-foreground" aria-hidden />
-            )}
-          </motion.span>
-        </AnimatePresence>
-      </Rise>
-
-      <Rise index={2} className="mt-6">
-        <h1 className="text-[30px] leading-9 font-semibold tracking-[-0.45px]">
+      <Rise index={1}>
+        <h1 className="text-2xl leading-8 font-semibold tracking-[-0.4px]">
           Flux entsperren
         </h1>
-        <p className="mt-2 text-[15px] leading-[22px] text-muted-foreground">
+        <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
           Gib das Passwort ein, um das Tool zu öffnen.
         </p>
       </Rise>
 
-      <Rise index={3} className="mt-8">
+      <Rise index={2} className="mt-6">
         <label
           htmlFor="password"
           className="block text-[13px] leading-5 font-medium text-neutral-900"
@@ -251,10 +221,10 @@ function LoginForm() {
         <div
           ref={field}
           className={cn(
-            "mt-2 flex h-[46px] items-center gap-2 rounded-[10px] border bg-card pr-1.5 pl-3.5 transition-[border-color,box-shadow] duration-200",
+            "mt-2 flex h-10 items-center gap-2 rounded-lg border bg-card pr-1 pl-3 transition-[border-color,box-shadow] duration-200",
             wrong
-              ? "border-[1.5px] border-danger shadow-[0_0_0_3px_rgb(240_68_56/0.15)]"
-              : "border-border-strong focus-within:border-neutral-900 focus-within:shadow-[0_0_0_3px_rgb(255_182_3/0.3)]",
+              ? "border-danger shadow-[0_0_0_3px_rgb(240_68_56/0.12)]"
+              : "border-border-strong focus-within:border-neutral-900 focus-within:shadow-[0_0_0_3px_rgb(23_23_23/0.08)]",
           )}
         >
           <input
@@ -273,7 +243,7 @@ function LoginForm() {
             aria-invalid={wrong}
             aria-describedby={wrong ? "password-error" : undefined}
             className={cn(
-              "h-full min-w-0 flex-1 bg-transparent text-base text-neutral-900 outline-none placeholder:text-neutral-400",
+              "h-full min-w-0 flex-1 bg-transparent text-sm text-neutral-900 outline-none placeholder:text-neutral-400",
               !visible && password && "font-semibold tracking-[3.2px]",
             )}
           />
@@ -329,7 +299,7 @@ function LoginForm() {
           disabled={status !== "idle"}
           whileTap={status === "idle" ? { scale: 0.98 } : undefined}
           transition={{ duration: 0.15, ease: EASE_OUT }}
-          className="group mt-5 flex h-[46px] w-full items-center justify-center overflow-hidden rounded-[10px] bg-brand text-[15px] font-semibold text-brand-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06),0_6px_16px_rgb(255_182_3/0.25)] outline-none transition-[filter] duration-150 hover:brightness-[0.97] focus-visible:ring-[3px] focus-visible:ring-neutral-900/20 disabled:cursor-default"
+          className="mt-4 flex h-10 w-full items-center justify-center overflow-hidden rounded-lg bg-brand text-sm font-semibold text-brand-foreground outline-none transition-[filter] duration-150 hover:brightness-[0.96] focus-visible:ring-[3px] focus-visible:ring-neutral-900/20 disabled:cursor-default"
         >
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.span
@@ -340,15 +310,7 @@ function LoginForm() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2, ease: EASE_OUT }}
             >
-              {status === "idle" && (
-                <>
-                  Entsperren
-                  <ArrowRight
-                    className="size-4 transition-transform duration-200 group-hover:translate-x-0.5"
-                    aria-hidden
-                  />
-                </>
-              )}
+              {status === "idle" && "Entsperren"}
               {status === "checking" && (
                 <>
                   <LoaderCircle
