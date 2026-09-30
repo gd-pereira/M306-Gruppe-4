@@ -128,10 +128,10 @@ docs/
 - `end` and `Header/created` have no time zone. They are read as Swiss local time (Europe/Zurich) and converted to Unix UTC in `lib/time.ts`.
 - High and low tariff are added up to get the effective meter reading:
 
-| Sensor | Direction                | OBIS codes                |
-| ------ | ------------------------ | ------------------------- |
-| ID742  | Consumption (from grid)  | `1-1:1.8.1` + `1-1:1.8.2` |
-| ID735  | Feed-in (into grid)      | `1-1:2.8.1` + `1-1:2.8.2` |
+| Sensor | Direction               | OBIS codes                |
+| ------ | ----------------------- | ------------------------- |
+| ID742  | Consumption (from grid) | `1-1:1.8.1` + `1-1:1.8.2` |
+| ID735  | Feed-in (into grid)     | `1-1:2.8.1` + `1-1:2.8.2` |
 
 - If one of the two tariffs is missing in a period, that period is skipped for that direction.
 - Other meters in the same file, e.g. a water meter with OBIS `8-1:1.8.0`, are ignored.
@@ -145,7 +145,7 @@ files chosen by the user
                             each file ends up as series, error or ignored
   -> buildResult()          per direction (consumption, feed-in):
        mergeSeries()          one sorted list per sensor, no duplicates
-       computeMeterReadings() SDAT usage + ESL readings -> reading every 15 min
+       fitMeterReadings()     SDAT usage fitted to the ESL readings -> reading every 15 min
        findGaps()             missing 15 min values
        compareWithEsl()       SDAT sum vs ESL difference per month
        aggregateAllLevels()   15 min, hour, day, week and month
@@ -155,7 +155,7 @@ files chosen by the user
 - **Parsers never throw.** Broken XML, the wrong file type or missing fields result in `{ ok: false, error: { file, message } }`, so one bad file does not stop the import.
 - **Fast file type check.** The import recognises ESL files by a simple search for `<ESLBillingData` and sends everything else to the SDAT parser. Using `detectFileType()` would parse every file twice, which made the import about twice as slow.
 - **Duplicates.** The files overlap, so the same timestamp can appear in many files. The value from the file with the newest creation date wins (`Creation` in SDAT, `created` in ESL). A missing creation date counts as oldest, on the same creation date the file read first wins. The number of dropped duplicate values is part of the import stats. A file is shown as **duplicate** in the file list if none of its values are used, because other files already cover all of them. With the sample data these are 306 SDAT and 3 ESL files.
-- **Meter readings.** For every SDAT value the calculation starts at the ESL reading closest in time (on a tie, the earlier one), adds the usage when going forward and subtracts it when going backward. Prefix sums and binary search keep this fast for about 129'000 values per sensor. A reading belongs to the end of its interval (timestamp + 15 min). Gaps count as no usage. Without any ESL reading no meter readings are calculated.
+- **Meter readings.** The SDAT sums are about 3 times the ESL differences, so just adding up SDAT from an ESL reading would make 2018 negative (down to about −28'000 kWh). Instead, between two ESL readings the SDAT values are scaled with the factor ESL difference ÷ SDAT sum, so every ESL reading is hit exactly and gaps in SDAT are made up for. Before the first and after the last fitted ESL reading the calculation uses SDAT ÷ the measured ratio (SDAT ÷ ESL over all ranges without gaps, exactly 3.00 in the sample data). The result always goes up and never gets negative: 2018 starts at 3'569.9 (consumption) and 6'435.3 kWh (feed-in). Besides the readings, `fitMeterReadings()` returns the `ratio` and the `sources`: `backcalc` (2018, calculated backwards), `measured` and `eslOnly` (after 06.09.2021). A reading belongs to the end of its interval (timestamp + 15 min). With only one ESL reading in reach the SDAT values are added as they are (ratio 1). Without any ESL reading no meter readings are calculated.
 - **ESL after SDAT.** SDAT data ends on 06.09.2021, ESL continues until 09.2022. The merged ESL readings are kept in the result so the chart can show them after SDAT ends.
 - **Cross-check.** `compareWithEsl()` compares the SDAT sum between two ESL readings with the difference of those readings and marks ranges where SDAT values are missing. No tolerance is applied: in the sample data the SDAT sum is always about 3 times the ESL difference (confirmed by the client), so a threshold would mark every month. Ranges without SDAT values and the range where SDAT ends are skipped.
 - **Aggregation.** Usage is summed per bucket, meter readings use the last reading in the bucket. Days, weeks and months start at midnight Swiss time, so DST days have 92 or 100 values. Weeks start on Monday. A reading at exactly 00:00 counts to the day before. All zoom levels are calculated once during the import, so switching levels in the chart is instant.
@@ -169,7 +169,7 @@ files chosen by the user
 | `Series`        | `lib/types.ts`      | Points of one file: `sensorId`, `direction`, `kind` (`usage` or `meterReading`), `createdAt`                                                           |
 | `FileError`     | `lib/types.ts`      | A file that could not be read and why                                                                                                                  |
 | `IgnoredFile`   | `lib/types.ts`      | A valid SDAT file from a sensor that is out of scope                                                                                                   |
-| `DirectionData` | `lib/import.ts`     | Everything the charts need for one direction: usage and meter readings per zoom level, ESL readings, gaps, comparisons                                 |
+| `DirectionData` | `lib/import.ts`     | Everything the charts need for one direction: usage and meter readings per zoom level, `meterRatio`, `meterSources`, ESL readings, gaps, comparisons   |
 | `ImportedFile`  | `lib/import.ts`     | One row of the import file table: `file`, `type`, `sensorIds`, `directions`, `from`, `status` (`imported`, `duplicate`, `ignored`, `error`), `message` |
 | `ImportResult`  | `lib/import.ts`     | `consumption`, `feedIn`, `errors`, `ignored`, `files` and `stats` (file counts, placeholders, duplicates)                                              |
 | `DataState`     | `lib/data-store.ts` | What the pages read: `status`, `progress`, `result`, `bounds`, `range`, `lastImport`                                                                   |
@@ -203,7 +203,7 @@ const {
 } = useDataStore();
 ```
 
-`result` contains everything else: `result.files` (file table), `result.errors`, `result.ignored`, `result.stats`, and per direction `result.consumption` / `result.feedIn` with `gaps`, `comparisons` and `valueCount`.
+`result` contains everything else: `result.files` (file table), `result.errors`, `result.ignored`, `result.stats`, and per direction `result.consumption` / `result.feedIn` with `gaps`, `comparisons`, `valueCount`, `meterRatio` (e.g. 3 for «SDAT ÷ 3.00») and `meterSources` (time ranges `backcalc`, `measured`, `eslOnly` for «Woher die Werte kommen»).
 
 ### Functions
 
@@ -325,12 +325,12 @@ Vitest runs every `tests/**/*.test.ts` file in a Node environment. The tests cov
 
 ## Brand
 
-| File                              | Use                               |
-| --------------------------------- | --------------------------------- |
-| `public/brand/flux-logo.svg`      | Logo on light background          |
-| `public/brand/flux-logo-dark.svg` | Logo on dark background           |
-| `public/brand/flux-mark.svg`      | Mark only, light background       |
-| `public/brand/flux-mark-dark.svg` | Mark only, dark background        |
+| File                              | Use                         |
+| --------------------------------- | --------------------------- |
+| `public/brand/flux-logo.svg`      | Logo on light background    |
+| `public/brand/flux-logo-dark.svg` | Logo on dark background     |
+| `public/brand/flux-mark.svg`      | Mark only, light background |
+| `public/brand/flux-mark-dark.svg` | Mark only, dark background  |
 
 In code, use `FluxLogo` or `FluxMark` from `components/brand/flux-logo.tsx`. Arrow and wordmark follow the text color (`currentColor`), the sun always stays amber. The app icon, Apple icon and share image are generated from the same paths.
 

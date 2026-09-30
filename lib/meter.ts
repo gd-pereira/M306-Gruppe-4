@@ -13,6 +13,24 @@ export interface Comparison {
   complete: boolean; // false if some sdat values are missing in between
 }
 
+// backcalc = before the first esl reading, calculated backwards with sdat ÷ ratio (2018)
+// measured = sdat values fitted to the esl readings (and after the last one: sdat ÷ ratio)
+// eslOnly = no sdat anymore, only the esl readings (after 06.09.2021)
+export type MeterSource = "backcalc" | "measured" | "eslOnly";
+
+// start is included and end is not, like Gap
+export interface SourceRange {
+  source: MeterSource;
+  start: number;
+  end: number;
+}
+
+export interface MeterFit {
+  readings: DataPoint[]; // one reading every 15 min while there is sdat
+  ratio: number; // sdat ÷ esl, 3.00 in the test data, the ui shows "SDAT ÷ 3.00"
+  sources: SourceRange[];
+}
+
 // returns the esl reading that is closest in time to ts
 // if both neighbours are equally far away, we take the earlier one
 // esl must be sorted by ts and must not be empty
@@ -51,36 +69,104 @@ function prefixSums(usage: DataPoint[]): number[] {
   return sums;
 }
 
-// calculates absolute meter readings from the 15 min usage (sdat) and a few known readings (esl)
-// each sdat value is the usage from ts to ts + 15 min, so the reading belongs to the end of that interval
-// we start at the closest esl reading: add the usage when going forward, subtract it when going backward
-// without any esl reading we have no starting point, so we return nothing
-export function computeMeterReadings(
+// sdat ÷ esl over all time ranges without gaps, a gap would make the ratio too small
+// if every range has gaps we take them anyway, without any range there is nothing to measure
+function measureRatio(fitted: Comparison[]): number {
+  const complete = fitted.filter((c) => c.complete);
+  const ranges = complete.length > 0 ? complete : fitted;
+
+  let sdat = 0;
+  let esl = 0;
+  for (const range of ranges) {
+    sdat += range.sdat;
+    esl += range.esl;
+  }
+
+  return sdat > 0 && esl > 0 ? roundKwh(sdat / esl) : 1;
+}
+
+function sourceRanges(
   usage: DataPoint[],
   esl: DataPoint[],
-): DataPoint[] {
-  if (esl.length === 0) {
-    return [];
+  firstFitted: number,
+): SourceRange[] {
+  const sdatStart = usage[0].ts;
+  const sdatEnd = usage[usage.length - 1].ts + INTERVAL;
+  const lastEsl = esl[esl.length - 1].ts;
+  const backcalcEnd = Math.min(Math.max(firstFitted, sdatStart), sdatEnd);
+
+  const sources: SourceRange[] = [
+    { source: "backcalc", start: sdatStart, end: backcalcEnd },
+    { source: "measured", start: backcalcEnd, end: sdatEnd },
+    { source: "eslOnly", start: sdatEnd, end: lastEsl },
+  ];
+  return sources.filter((range) => range.start < range.end);
+}
+
+// calculates absolute meter readings from the 15 min usage (sdat) and a few known readings (esl)
+// each sdat value is the usage from ts to ts + 15 min, so the reading belongs to the end of that interval
+// the sdat sums are about 3x the esl differences, so just adding them up would make 2018 negative.
+// between two esl readings the sdat values are scaled with esl difference ÷ sdat sum,
+// so every reading is hit exactly and gaps in sdat are made up for.
+// before the first and after the last of these readings we use sdat ÷ the measured ratio.
+// without any esl reading we have no starting point, so we return nothing
+export function fitMeterReadings(
+  usage: DataPoint[],
+  esl: DataPoint[],
+): MeterFit {
+  if (esl.length === 0 || usage.length === 0) {
+    return { readings: [], ratio: 1, sources: [] };
   }
 
+  // only ranges that sdat covers completely from start to end can be fitted.
+  // compareWithEsl already leaves out the range where sdat ends, the one where it starts
+  // (esl before 2018) would be scaled with only part of its usage
+  const fitted = compareWithEsl(usage, esl).filter(
+    (c) => c.start >= usage[0].ts && (c.sdat > 0 || c.esl === 0),
+  );
+  const ratio = measureRatio(fitted);
   const sums = prefixSums(usage);
+  const usageBefore = (ts: number) => sums[firstIndexFrom(usage, ts)];
+
+  // with nothing to fit, one esl reading is the starting point for everything
+  const start =
+    fitted.length > 0
+      ? {
+          ts: fitted[0].start,
+          value: esl[firstIndexFrom(esl, fitted[0].start)].value,
+        }
+      : nearestReading(esl, usage[0].ts);
+  const endTs = fitted.length > 0 ? fitted[fitted.length - 1].end : start.ts;
+  const end = { ts: endTs, value: esl[firstIndexFrom(esl, endTs)].value };
+
   const readings: DataPoint[] = [];
+  let k = 0; // current fitted range, the readings are sorted so we only move forward
 
-  for (const point of usage) {
-    const end = point.ts + INTERVAL;
-    const reference = nearestReading(esl, end);
+  for (let i = 0; i < usage.length; i++) {
+    const ts = usage[i].ts + INTERVAL;
+    const usageUntil = sums[i + 1];
+    let value: number;
 
-    // usage of everything before "end" and of everything before the esl reading
-    const usageUntilEnd = sums[firstIndexFrom(usage, end)];
-    const usageUntilReference = sums[firstIndexFrom(usage, reference.ts)];
+    if (ts <= start.ts) {
+      value = start.value - (usageBefore(start.ts) - usageUntil) / ratio;
+    } else if (ts > end.ts) {
+      value = end.value + (usageUntil - usageBefore(end.ts)) / ratio;
+    } else {
+      while (fitted[k].end < ts) {
+        k++;
+      }
+      const range = fitted[k];
+      const rangeStart = usageBefore(range.start);
+      const rangeUsage = usageBefore(range.end) - rangeStart;
+      const factor = rangeUsage > 0 ? range.esl / rangeUsage : 0;
+      const startValue = esl[firstIndexFrom(esl, range.start)].value;
+      value = startValue + (usageUntil - rangeStart) * factor;
+    }
 
-    // positive if the esl reading is earlier (add), negative if it is later (subtract)
-    const between = usageUntilEnd - usageUntilReference;
-
-    readings.push({ ts: end, value: roundKwh(reference.value + between) });
+    readings.push({ ts, value: roundKwh(value) });
   }
 
-  return readings;
+  return { readings, ratio, sources: sourceRanges(usage, esl, start.ts) };
 }
 
 // compares the sdat sum between two esl readings with the difference of those readings

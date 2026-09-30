@@ -2,8 +2,9 @@ import { aggregateAllLevels, type ZoomLevel } from "@/lib/aggregate";
 import { ESL_ROOT, SDAT_ROOT_PREFIX, type FileType } from "@/lib/detect";
 import {
   compareWithEsl,
-  computeMeterReadings,
+  fitMeterReadings,
   type Comparison,
+  type SourceRange,
 } from "@/lib/meter";
 import { parseEsl } from "@/lib/parse-esl";
 import { parseSdat } from "@/lib/parse-sdat";
@@ -53,6 +54,8 @@ export interface ParsedFiles {
 export interface DirectionData {
   usage: Record<ZoomLevel, DataPoint[]>; // sdat usage for every zoom level
   meterReading: Record<ZoomLevel, DataPoint[]>; // calculated meter reading for every zoom level
+  meterRatio: number; // sdat ÷ esl used before the first esl reading, 3.00 in the test data
+  meterSources: SourceRange[]; // where the meter reading comes from (backcalc, measured, eslOnly)
   esl: DataPoint[]; // the real esl readings, these go on after sdat ends (09/2021)
   valueCount: number; // 15 min values after merging the files
   gaps: Gap[];
@@ -194,11 +197,13 @@ function buildDirection(
 
   const usage = sdat.points;
   const esl = eslMerged.points;
-  const meterReading = computeMeterReadings(usage, esl);
+  const meter = fitMeterReadings(usage, esl);
 
   return {
     usage: aggregateAllLevels(usage, "usage"),
-    meterReading: aggregateAllLevels(meterReading, "meterReading"),
+    meterReading: aggregateAllLevels(meter.readings, "meterReading"),
+    meterRatio: meter.ratio,
+    meterSources: meter.sources,
     esl,
     valueCount: usage.length,
     gaps: findGaps(usage),
