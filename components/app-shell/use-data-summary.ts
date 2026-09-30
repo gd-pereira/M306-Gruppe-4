@@ -1,3 +1,5 @@
+import { useImportStore } from "@/components/import/import-store";
+
 export interface DataSummary {
   fileCount: number;
   consumptionKwh: number;
@@ -6,16 +8,22 @@ export interface DataSummary {
   lastYear: number;
 }
 
-// fake values from the mockup until the store (T3-2) exists, set to null to see the empty state
-const FAKE_SUMMARY: DataSummary | null = {
-  fileCount: 5180,
-  consumptionKwh: 50865,
-  feedInKwh: 16932,
-  firstYear: 2018,
-  lastYear: 2021,
-};
+function yearOf(ts: number): number {
+  return new Date(ts * 1000).getUTCFullYear();
+}
 
 // null = nothing imported yet
 export function useDataSummary(): DataSummary | null {
-  return FAKE_SUMMARY;
+  const { result, lastImport } = useImportStore();
+  if (!result || !lastImport) {
+    return null;
+  }
+  const { summary } = result;
+  return {
+    fileCount: lastImport.fileCount,
+    consumptionKwh: summary.kwh.consumption,
+    feedInKwh: summary.kwh.feedIn,
+    firstYear: summary.period ? yearOf(summary.period.start) : 0,
+    lastYear: summary.period ? yearOf(summary.period.end) : 0,
+  };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 
 describe("formatNumber", () => {
   it("groups thousands with a typographic apostrophe", () => {
@@ -18,5 +18,19 @@ describe("formatNumber", () => {
   it("keeps the sign but never shows -0", () => {
     expect(formatNumber(-2500)).toBe("-2’500");
     expect(formatNumber(-0.2)).toBe("0");
+  });
+});
+
+describe("formatDate", () => {
+  it("shows the day in zurich as dd.mm.yyyy", () => {
+    expect(formatDate(Date.UTC(2018, 0, 1) / 1000)).toBe("01.01.2018");
+    expect(formatDate(Date.UTC(2021, 8, 6, 12) / 1000)).toBe("06.09.2021");
+  });
+
+  it("uses zurich time, not utc", () => {
+    // 23:30 utc on 31.12. is already 00:30 on 01.01. in zurich
+    expect(formatDate(Date.UTC(2020, 11, 31, 23, 30) / 1000)).toBe(
+      "01.01.2021",
+    );
   });
 });

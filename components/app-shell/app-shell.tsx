@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
+import { MotionProvider } from "@/components/motion-provider";
 import { Sidebar } from "./sidebar";
 import { SmallScreenNotice } from "./small-screen-notice";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <>
+    <MotionProvider>
       <SmallScreenNotice />
       <div className="flex min-h-dvh max-lg:hidden">
         <Sidebar />
@@ -12,6 +13,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
-    </>
+    </MotionProvider>
   );
 }
