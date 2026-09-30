@@ -132,7 +132,7 @@ describe("url parameters", () => {
 
   it("links to the zählerstand with the same settings", () => {
     expect(meterHref(csv)).toBe(
-      "/zaehlerstand?sensor=ID742&von=2018-01-01&bis=2021-09-06",
+      "/zaehlerstand?sensor=ID742&von=2018-01-01&bis=2021-09-06&quelle=export",
     );
     expect(
       selectionFromParams(Object.fromEntries(selectionParams(json))),

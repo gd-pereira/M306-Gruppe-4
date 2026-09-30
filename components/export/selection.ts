@@ -56,7 +56,14 @@ export function selectionParams(
   return params;
 }
 
+// quelle=export turns the header button of the zählerstand into «Zurück zum Export»
 export function meterHref(selection: ExportSelection): string {
-  const { sensor, range } = selection;
-  return `/zaehlerstand?${new URLSearchParams({ sensor, von: range.from, bis: range.to })}`;
+  const params = new URLSearchParams({
+    sensor: selection.sensor,
+    von: selection.range.from,
+    bis: selection.range.to,
+    quelle: "export",
+  });
+  if (selection.format === "json") params.set("format", "json");
+  return `/zaehlerstand?${params}`;
 }

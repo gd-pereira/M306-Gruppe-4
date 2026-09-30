@@ -4,6 +4,7 @@ import { ExportScreen } from "@/components/export/export-screen";
 import {
   modeFromParams,
   selectionFromParams,
+  selectionParams,
 } from "@/components/export/selection";
 
 export const metadata: Metadata = { title: "Export" };
@@ -15,13 +16,19 @@ export default async function ExportPage({
 }) {
   const params = await searchParams;
   const initial = selectionFromParams(params);
+  const mode = modeFromParams(params);
   return (
     <>
       <PageHeader
         title="Export"
         description="Absolute Zählerstände in kWh als Datei speichern oder direkt an einen Server senden"
       />
-      <ExportScreen initial={initial} initialMode={modeFromParams(params)} />
+      {/* a link to other parameters (palette, «Zuletzt angesehen») starts the screen fresh */}
+      <ExportScreen
+        key={`${selectionParams(initial, mode)}`}
+        initial={initial}
+        initialMode={mode}
+      />
     </>
   );
 }

@@ -1,156 +1,246 @@
 "use client";
 
+import { Lock, PanelLeft, Search } from "lucide-react";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  type Variants,
+} from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Download,
-  Gauge,
-  LayoutDashboard,
-  Lock,
-  PanelLeft,
-  Search,
-  Upload,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
-import { FluxLogo } from "@/components/brand/flux-logo";
+import { Fragment } from "react";
+import { FluxLogo, FluxMark } from "@/components/brand/flux-logo";
+import { EASE_OUT } from "@/components/motion-provider";
+import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { setCommandPaletteOpen } from "./command-palette";
+import {
+  NAV_GROUPS,
+  NEEDS_DATA_HINT,
+  navItemFor,
+  shortcutOf,
+  type NavItem,
+} from "./nav";
+import { useRecentViews, type RecentView } from "./recent-views";
+import { toggleSidebar, useSidebarPrefs } from "./sidebar-prefs";
+import { useHydrated, useModKeyLabel } from "./shortcuts";
 import { useDataSummary, type DataSummary } from "./use-data-summary";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  needsData: boolean;
-}
+// 12 px gap to the window edge plus the sidebar itself (240 px open, 64 px collapsed)
+const OPEN_WIDTH = 252;
+const COLLAPSED_WIDTH = 76;
 
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
-  {
-    label: "Übersicht",
-    items: [
-      {
-        href: "/dashboard",
-        label: "Dashboard",
-        icon: LayoutDashboard,
-        needsData: true,
-      },
-    ],
-  },
-  {
-    label: "Analyse",
-    items: [
-      { href: "/verbrauch", label: "Verbrauch", icon: Zap, needsData: true },
-      {
-        href: "/zaehlerstand",
-        label: "Zählerstand",
-        icon: Gauge,
-        needsData: true,
-      },
-    ],
-  },
-  {
-    label: "Daten",
-    items: [
-      { href: "/import", label: "Import", icon: Upload, needsData: false },
-      { href: "/export", label: "Export", icon: Download, needsData: true },
-    ],
-  },
-];
+const FOCUS_RING =
+  "focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none";
+
+// the old content fades out fast, the new one fades in once the width is on its way
+const contentVariants: Variants = {
+  hidden: { opacity: 0 },
+  shown: (animate: boolean) => ({
+    opacity: 1,
+    transition: animate
+      ? { duration: 0.25, delay: 0.12, ease: EASE_OUT }
+      : { duration: 0 },
+  }),
+  gone: (animate: boolean) => ({
+    opacity: 0,
+    transition: { duration: animate ? 0.1 : 0 },
+  }),
+};
 
 export function Sidebar() {
   const pathname = usePathname();
   const summary = useDataSummary();
+  const { collapsed, animate } = useSidebarPrefs();
+  const hydrated = useHydrated();
+  const reduceMotion = useReducedMotion();
+  const play = animate && !reduceMotion;
 
   return (
-    <div className="sticky top-0 flex h-dvh shrink-0 py-3 pl-3">
-      <aside className="relative flex w-60 flex-col rounded-[18px] bg-sidebar p-3.5 text-sidebar-foreground shadow-sidebar">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
-        >
-          <div className="absolute -top-[70px] -left-[60px] h-40 w-[220px] rounded-full bg-brand/16 blur-[30px]" />
-        </div>
+    <TooltipProvider>
+      <motion.div
+        data-sidebar-frame
+        data-hydrated={hydrated}
+        initial={false}
+        animate={{ width: collapsed ? COLLAPSED_WIDTH : OPEN_WIDTH }}
+        transition={play ? { duration: 0.4, ease: EASE_OUT } : { duration: 0 }}
+        className="sticky top-0 flex h-dvh shrink-0 py-3 pl-3"
+      >
+        <aside className="relative flex-1 overflow-hidden rounded-[18px] bg-sidebar text-sidebar-foreground shadow-sidebar">
+          <AnimatePresence initial={false} mode="popLayout" custom={play}>
+            <motion.div
+              key={collapsed ? "collapsed" : "open"}
+              data-sidebar-content
+              custom={play}
+              variants={contentVariants}
+              initial="hidden"
+              animate="shown"
+              exit="gone"
+              className="h-full"
+            >
+              {collapsed ? (
+                <CollapsedSidebar pathname={pathname} summary={summary} />
+              ) : (
+                <OpenSidebar pathname={pathname} summary={summary} />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </aside>
+      </motion.div>
+    </TooltipProvider>
+  );
+}
 
-        <div className="relative flex items-center justify-between py-1 pr-0.5 pl-1.5">
-          <FluxLogo className="h-7 w-auto text-sidebar-accent-foreground" />
-          {/* collapsing comes with T4-10 */}
+function Glow({ className }: { className: string }) {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute -top-[70px] -left-[60px] rounded-full bg-brand/16 blur-[30px]",
+        className,
+      )}
+    />
+  );
+}
+
+function OpenSidebar({
+  pathname,
+  summary,
+}: {
+  pathname: string;
+  summary: DataSummary | null;
+}) {
+  const recent = useRecentViews();
+  const mod = useModKeyLabel();
+
+  return (
+    <div className="relative flex h-full w-60 flex-col p-3.5">
+      <Glow className="h-40 w-[220px]" />
+
+      <div className="relative flex items-center justify-between py-1 pr-0.5 pl-1.5">
+        <FluxLogo className="h-7 w-auto text-sidebar-accent-foreground" />
+        <Tooltip label="Sidebar einklappen" sideOffset={24}>
           <button
             type="button"
-            disabled
+            onClick={toggleSidebar}
             aria-label="Sidebar einklappen"
-            className="flex size-7 items-center justify-center rounded-lg text-sidebar-icon"
+            className={cn(
+              "flex size-7 items-center justify-center rounded-lg text-sidebar-icon transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-accent-foreground active:translate-y-px",
+              FOCUS_RING,
+            )}
           >
             <PanelLeft className="size-4" />
           </button>
-        </div>
+        </Tooltip>
+      </div>
 
-        {/* search comes with T4-10 */}
-        <div className="relative mt-[18px] flex h-9 items-center gap-2 rounded-[10px] border border-sidebar-card-border bg-sidebar-card pr-2 pl-2.5 text-sidebar-placeholder">
-          <Search className="size-4" aria-hidden />
-          <span className="flex-1 text-[13px]">Suchen …</span>
-          <kbd className="rounded-[5px] border border-sidebar-border bg-sidebar-accent px-[5px] py-px font-mono text-[10px] font-medium text-sidebar-icon">
-            Ctrl K
-          </kbd>
-        </div>
+      <button
+        type="button"
+        onClick={() => setCommandPaletteOpen(true)}
+        aria-keyshortcuts="Control+K Meta+K"
+        className={cn(
+          "relative mt-[18px] flex h-9 shrink-0 items-center gap-2 rounded-[10px] border border-sidebar-card-border bg-sidebar-card pr-2 pl-2.5 text-left text-sidebar-placeholder transition-colors duration-150 hover:border-sidebar-border hover:text-sidebar-foreground active:translate-y-px",
+          FOCUS_RING,
+        )}
+      >
+        <Search className="size-4" aria-hidden />
+        <span className="flex-1 text-[13px]">Suchen …</span>
+        <kbd className="rounded-[5px] border border-sidebar-border bg-sidebar-accent px-[5px] py-px font-mono text-[10px] font-medium text-sidebar-icon">
+          {mod} K
+        </kbd>
+      </button>
 
-        <nav
-          aria-label="Hauptnavigation"
-          className="relative mt-[22px] flex flex-col gap-5"
-        >
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="flex flex-col gap-0.5">
-              <p className="pb-1.5 pl-2.5 text-[10.5px] font-medium tracking-[0.08em] text-sidebar-muted uppercase">
-                {group.label}
-              </p>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={pathname === item.href}
-                  disabled={item.needsData && !summary}
-                  badge={
-                    item.href === "/import" && summary
-                      ? formatNumber(summary.fileCount)
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          ))}
-        </nav>
+      {/* scrolls on short windows, the negative margin keeps the active indicator and focus rings visible */}
+      <nav
+        aria-label="Hauptnavigation"
+        className="relative mt-[22px] -mr-1 -ml-4 flex min-h-0 [scrollbar-width:none] flex-col gap-5 overflow-y-auto py-0.5 pr-1 pl-4"
+      >
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} className="flex flex-col gap-0.5">
+            <GroupLabel>{group.label}</GroupLabel>
+            {group.items.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={pathname === item.href}
+                disabled={item.needsData && !summary}
+                badge={
+                  item.href === "/import" && summary
+                    ? formatNumber(summary.fileCount)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        ))}
 
-        <div className="min-h-3 flex-1" />
+        <RecentGroup views={summary ? recent : []} />
+      </nav>
 
-        <EnergyBalance summary={summary} />
+      <div className="min-h-3 flex-1" />
 
-        <div className="my-3 h-px bg-sidebar-subtle" />
+      <EnergyBalance summary={summary} />
 
-        <div className="flex items-center justify-between pl-1">
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <span className="flex size-2.5 items-center justify-center rounded-full bg-success/22">
-                <span className="size-1.5 rounded-full bg-success" />
-              </span>
-              <span className="text-xs font-medium text-sidebar-accent-foreground">
-                Lokal gespeichert
-              </span>
-            </div>
-            <span className="pl-[18px] text-[11px] text-sidebar-muted">
-              Nichts verlässt den Browser
+      <div className="my-3 h-px shrink-0 bg-sidebar-subtle" />
+
+      <div className="flex shrink-0 items-center justify-between pl-1">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <span className="flex size-2.5 items-center justify-center rounded-full bg-success/22">
+              <span className="size-1.5 rounded-full bg-success" />
+            </span>
+            <span className="text-xs font-medium text-sidebar-accent-foreground">
+              Lokal gespeichert
             </span>
           </div>
+          <span className="pl-[18px] text-[11px] text-sidebar-muted">
+            Nichts verlässt den Browser
+          </span>
+        </div>
+        <Tooltip label="App sperren" sideOffset={22}>
           <Link
             href="/login"
             aria-label="App sperren"
-            title="App sperren"
-            className="flex size-8 items-center justify-center rounded-[10px] border border-sidebar-border bg-sidebar-accent text-sidebar-icon transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+            className={cn(
+              "flex size-8 items-center justify-center rounded-[10px] border border-sidebar-border bg-sidebar-accent text-sidebar-icon transition-colors duration-150 hover:text-sidebar-accent-foreground active:translate-y-px",
+              FOCUS_RING,
+            )}
           >
             <Lock className="size-4" />
           </Link>
-        </div>
-      </aside>
+        </Tooltip>
+      </div>
     </div>
+  );
+}
+
+function GroupLabel({ children }: { children: string }) {
+  return (
+    <p className="pb-1.5 pl-2.5 text-[10.5px] font-medium tracking-[0.08em] text-sidebar-muted uppercase">
+      {children}
+    </p>
+  );
+}
+
+// glides to the new page instead of jumping, one id per sidebar state
+function ActiveIndicator({
+  state,
+  className,
+}: {
+  state: "open" | "collapsed";
+  className: string;
+}) {
+  return (
+    <motion.span
+      layoutId={`nav-indicator-${state}`}
+      transition={{ duration: 0.35, ease: EASE_OUT }}
+      className={cn(
+        "absolute h-4 w-[3px] rounded-r-[3px] bg-sidebar-primary",
+        className,
+      )}
+    />
   );
 }
 
@@ -170,17 +260,20 @@ function NavLink({
     "relative flex h-9 items-center gap-2.5 rounded-[10px] border border-transparent pr-2 pl-2.5 text-sm font-medium",
     active &&
       "border-sidebar-border bg-sidebar-accent font-semibold text-sidebar-accent-foreground drop-shadow-[0_1px_1px_rgb(0_0_0/0.3)]",
-    !active && disabled && "text-sidebar-disabled",
+    !active && disabled && "cursor-default text-sidebar-disabled",
     !active &&
       !disabled &&
-      "transition-colors hover:bg-sidebar-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none",
+      cn(
+        "transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-accent-foreground",
+        FOCUS_RING,
+      ),
   );
   const content = (
     <>
       <Icon
         aria-hidden
         className={cn(
-          "size-[18px]",
+          "size-[18px] shrink-0",
           active
             ? "text-sidebar-primary"
             : disabled
@@ -195,30 +288,100 @@ function NavLink({
         </span>
       )}
       {active && (
-        <span className="absolute top-1/2 -left-4 h-4 w-[3px] -translate-y-1/2 rounded-r-[3px] bg-sidebar-primary" />
+        <ActiveIndicator state="open" className="top-1/2 -left-4 -mt-2" />
       )}
     </>
   );
 
+  // the keys remount the tooltip when span and link swap, Base UI binds hover to the first element only
   if (disabled && !active) {
     return (
-      <span
-        aria-disabled
-        title="Erst nach dem Import verfügbar"
-        className={className}
-      >
-        {content}
-      </span>
+      <Tooltip key="locked" label={NEEDS_DATA_HINT} delay={400} sideOffset={22}>
+        <span aria-disabled className={className}>
+          {content}
+        </span>
+      </Tooltip>
     );
   }
 
   return (
-    <Link
-      href={item.href}
-      aria-current={active ? "page" : undefined}
-      className={className}
+    <Tooltip
+      key="link"
+      label={item.label}
+      shortcut={shortcutOf(item)}
+      delay={700}
+      sideOffset={22}
     >
-      {content}
+      <Link
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        aria-keyshortcuts={`g ${item.key.toLowerCase()}`}
+        className={className}
+      >
+        {content}
+      </Link>
+    </Tooltip>
+  );
+}
+
+// the last three periods and exports, only while data is loaded (figma «Daten=nein» has no group)
+function RecentGroup({ views }: { views: RecentView[] }) {
+  return (
+    <AnimatePresence initial={false}>
+      {views.length > 0 && (
+        <motion.div
+          key="recent"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, transition: { duration: 0.15 } }}
+          transition={{ duration: 0.35, ease: EASE_OUT }}
+          className="flex flex-col gap-0.5"
+        >
+          <GroupLabel>Zuletzt angesehen</GroupLabel>
+          <AnimatePresence initial={false} mode="popLayout">
+            {views.map((view, index) => (
+              <motion.div
+                key={`${view.page}|${view.label}`}
+                layout="position"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                transition={{
+                  duration: 0.35,
+                  ease: EASE_OUT,
+                  delay: index * 0.04,
+                }}
+              >
+                <RecentLink view={view} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function RecentLink({ view }: { view: RecentView }) {
+  const nav = navItemFor(`/${view.page}`);
+  const Icon = nav?.icon ?? Search;
+  return (
+    <Link
+      href={view.href}
+      className={cn(
+        "flex h-10 items-center gap-2.5 rounded-[10px] px-2 transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-accent-foreground",
+        FOCUS_RING,
+      )}
+    >
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-[7px] border border-sidebar-card-border bg-sidebar-hover">
+        <Icon aria-hidden className="size-[13px] text-sidebar-icon" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[13px] font-medium">{view.label}</span>
+        <span className="truncate text-[11px] text-sidebar-muted">
+          {nav?.label}
+        </span>
+      </span>
     </Link>
   );
 }
@@ -243,7 +406,7 @@ function EnergyBalance({ summary }: { summary: DataSummary | null }) {
   return (
     <section
       aria-label="Energiebilanz"
-      className="flex flex-col gap-3 rounded-[14px] border border-sidebar-card-border bg-sidebar-card p-3.5"
+      className="flex shrink-0 flex-col gap-3 rounded-[14px] border border-sidebar-card-border bg-sidebar-card p-3.5"
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-sidebar-accent-foreground">
@@ -287,9 +450,259 @@ function EnergyBalance({ summary }: { summary: DataSummary | null }) {
 
       <p className="text-[11px] text-sidebar-muted">
         {summary && summary.consumptionKwh > 0
-          ? `Einspeisung deckt ${Math.round((summary.feedInKwh / summary.consumptionKwh) * 100)} % des Bezugs`
+          ? `Einspeisung deckt ${coverage(summary)} % des Bezugs`
           : "Erscheint nach dem ersten Import"}
       </p>
     </section>
+  );
+}
+
+function coverage(summary: DataSummary): number {
+  return Math.round((summary.feedInKwh / summary.consumptionKwh) * 100);
+}
+
+// figma «Sidebar – Eingeklappt»: icons only, names and shortcuts in tooltips
+function CollapsedSidebar({
+  pathname,
+  summary,
+}: {
+  pathname: string;
+  summary: DataSummary | null;
+}) {
+  const mod = useModKeyLabel();
+
+  return (
+    <div className="relative flex h-full w-16 flex-col items-center px-2.5 py-3.5">
+      <Glow className="size-[140px]" />
+
+      <FluxMark className="relative h-7 w-[30.4px] shrink-0 text-sidebar-accent-foreground" />
+
+      <Tooltip label="Suchen" shortcut={`${mod} K`} delay={250} sideOffset={18}>
+        <button
+          type="button"
+          onClick={() => setCommandPaletteOpen(true)}
+          aria-label="Suchen"
+          aria-keyshortcuts="Control+K Meta+K"
+          className={cn(
+            "relative mt-5 flex h-10 w-11 shrink-0 items-center justify-center rounded-[10px] border border-sidebar-card-border bg-sidebar-card text-sidebar-icon transition-colors duration-150 hover:border-sidebar-border hover:text-sidebar-accent-foreground active:translate-y-px",
+            FOCUS_RING,
+          )}
+        >
+          <Search className="size-[18px]" />
+        </button>
+      </Tooltip>
+
+      <nav
+        aria-label="Hauptnavigation"
+        className="relative mt-[18px] flex min-h-0 flex-col items-center"
+      >
+        {NAV_GROUPS.map((group, index) => (
+          <Fragment key={group.label}>
+            {index > 0 && (
+              <div aria-hidden className="my-2.5 h-px w-5 bg-sidebar-subtle" />
+            )}
+            <div
+              role="group"
+              aria-label={group.label}
+              className="flex flex-col gap-1"
+            >
+              {group.items.map((item) => (
+                <CollapsedNavLink
+                  key={item.href}
+                  item={item}
+                  active={pathname === item.href}
+                  disabled={item.needsData && !summary}
+                  dot={item.href === "/import" && summary !== null}
+                />
+              ))}
+            </div>
+          </Fragment>
+        ))}
+      </nav>
+
+      <div className="min-h-3 flex-1" />
+
+      <MiniBalance summary={summary} />
+
+      <Tooltip label="Sidebar ausklappen" delay={250} sideOffset={20}>
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Sidebar ausklappen"
+          className={cn(
+            "mt-3 flex h-9 w-10 shrink-0 items-center justify-center rounded-[10px] text-sidebar-icon transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-accent-foreground active:translate-y-px",
+            FOCUS_RING,
+          )}
+        >
+          <PanelLeft className="size-[18px]" />
+        </button>
+      </Tooltip>
+
+      <Tooltip
+        label="App sperren"
+        hint="Lokal gespeichert"
+        delay={250}
+        sideOffset={20}
+      >
+        <Link
+          href="/login"
+          aria-label="App sperren"
+          className={cn(
+            "relative mt-1 flex h-9 w-10 shrink-0 items-center justify-center rounded-[10px] border border-sidebar-border bg-sidebar-accent text-sidebar-icon transition-colors duration-150 hover:text-sidebar-accent-foreground active:translate-y-px",
+            FOCUS_RING,
+          )}
+        >
+          <Lock className="size-4" />
+          <span
+            aria-hidden
+            className="absolute -top-0.5 right-0.5 size-2 rounded-full bg-success"
+          />
+        </Link>
+      </Tooltip>
+    </div>
+  );
+}
+
+function CollapsedNavLink({
+  item,
+  active,
+  disabled,
+  dot,
+}: {
+  item: NavItem;
+  active: boolean;
+  disabled: boolean;
+  dot: boolean;
+}) {
+  const Icon = item.icon;
+  const className = cn(
+    "relative flex h-10 w-11 items-center justify-center rounded-[10px] border border-transparent",
+    active && "border-sidebar-border bg-sidebar-accent",
+    !active && disabled && "cursor-default",
+    !active &&
+      !disabled &&
+      cn("transition-colors duration-150 hover:bg-sidebar-hover", FOCUS_RING),
+  );
+  const content = (
+    <>
+      <Icon
+        aria-hidden
+        className={cn(
+          "size-[18px]",
+          active
+            ? "text-sidebar-primary"
+            : disabled
+              ? "text-sidebar-disabled"
+              : "text-sidebar-icon",
+        )}
+      />
+      {dot && (
+        <span
+          aria-hidden
+          className="absolute top-[7px] left-[31px] size-[7px] rounded-full bg-sidebar-primary"
+        />
+      )}
+      {active && (
+        <ActiveIndicator
+          state="collapsed"
+          className="top-[11px] -left-[11px]"
+        />
+      )}
+    </>
+  );
+
+  if (disabled && !active) {
+    return (
+      <Tooltip
+        key="locked"
+        label={item.label}
+        hint={NEEDS_DATA_HINT}
+        delay={250}
+        sideOffset={18}
+      >
+        <span aria-disabled aria-label={item.label} className={className}>
+          {content}
+        </span>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Tooltip
+      key="link"
+      label={item.label}
+      shortcut={shortcutOf(item)}
+      delay={250}
+      sideOffset={18}
+    >
+      <Link
+        href={item.href}
+        aria-label={item.label}
+        aria-current={active ? "page" : undefined}
+        aria-keyshortcuts={`g ${item.key.toLowerCase()}`}
+        className={className}
+      >
+        {content}
+      </Link>
+    </Tooltip>
+  );
+}
+
+function MiniBalance({ summary }: { summary: DataSummary | null }) {
+  const max = summary ? Math.max(summary.consumptionKwh, summary.feedInKwh) : 0;
+  const share =
+    summary && summary.consumptionKwh > 0 ? coverage(summary) : null;
+  const bars = [
+    {
+      key: "consumption",
+      fill: "bg-sidebar-accent-foreground",
+      kwh: summary?.consumptionKwh,
+    },
+    { key: "feedIn", fill: "bg-brand", kwh: summary?.feedInKwh },
+  ];
+  const description =
+    share === null
+      ? "Energiebilanz erscheint nach dem ersten Import"
+      : `Einspeisung deckt ${share} % des Bezugs`;
+
+  return (
+    <Tooltip label={description} delay={250} sideOffset={18}>
+      <div
+        role="img"
+        tabIndex={0}
+        aria-label={description}
+        className={cn(
+          "flex w-11 shrink-0 flex-col items-center gap-1.5 rounded-xl border border-sidebar-card-border bg-sidebar-card pt-2.5 pb-2",
+          FOCUS_RING,
+        )}
+      >
+        <div className="flex h-[30px] items-end gap-1">
+          {bars.map((bar) => (
+            <div
+              key={bar.key}
+              className={cn(
+                "relative h-full w-1.5 rounded-[2px]",
+                share === null && "bg-sidebar-track",
+              )}
+            >
+              {bar.kwh !== undefined && max > 0 && (
+                <motion.div
+                  className={cn(
+                    "absolute inset-0 origin-bottom rounded-[2px]",
+                    bar.fill,
+                  )}
+                  initial={{ scaleY: 0 }}
+                  animate={{ scaleY: bar.kwh / max }}
+                  transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.15 }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <span className="font-mono text-[10px] font-medium text-sidebar-foreground">
+          {share === null ? "–" : `${share} %`}
+        </span>
+      </div>
+    </Tooltip>
   );
 }

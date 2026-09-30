@@ -129,7 +129,7 @@ const slide = {
   }),
 };
 
-function Calendar({
+export function Calendar({
   label,
   value,
   min,

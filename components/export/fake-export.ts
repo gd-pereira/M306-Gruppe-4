@@ -130,9 +130,9 @@ export function presetFor(range: DayRange): RangePreset | undefined {
   );
 }
 
-const INTERVAL = 900;
+export const INTERVAL = 900;
 
-interface Grid {
+export interface Grid {
   start: number;
   count: number;
   // 1 where the interval lies in a gap day and has no value
@@ -141,7 +141,7 @@ interface Grid {
 
 let grid: Grid | null = null;
 
-function getGrid(): Grid {
+export function getGrid(): Grid {
   if (grid) return grid;
   const start = dayStart(DATA_START);
   const count = (dayStart(addDays(DATA_END, 1)) - start) / INTERVAL;
@@ -195,7 +195,7 @@ const METER = {
 const readingsCache = new Map<SensorId, Float64Array>();
 
 // meter reading at the end of every 15 min interval
-function getReadings(sensor: SensorId): Float64Array {
+export function getReadings(sensor: SensorId): Float64Array {
   const cached = readingsCache.get(sensor);
   if (cached) return cached;
   const { start, count } = getGrid();
