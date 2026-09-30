@@ -227,6 +227,28 @@ export function switchLevel(
   return periodOf(level, anchor, scope);
 }
 
+const DRILL_TARGET: Record<Resolution, Level | null> = {
+  month: "year",
+  week: "month",
+  day: "day",
+  hour: "day",
+  "15min": null,
+};
+
+// the level a click on a bucket opens, null at the 15-min view
+export function drillLevel(period: Period): Level | null {
+  return DRILL_TARGET[resolutionOf(period)];
+}
+
+export function drillDown(
+  period: Period,
+  day: DayKey,
+  scope: Scope,
+): Period | null {
+  const level = drillLevel(period);
+  return level ? periodOf(level, clampDay(day, scope.data), scope) : null;
+}
+
 export function resolutionOf(period: Period): Resolution {
   switch (period.level) {
     case "day":

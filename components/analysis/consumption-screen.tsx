@@ -12,7 +12,13 @@ import {
   SERIES,
   type SeriesKey,
 } from "./consumption-chart";
-import { Breadcrumb, LevelToggle, Pager, usePeriod } from "./controls";
+import {
+  Breadcrumb,
+  drillProps,
+  LevelToggle,
+  Pager,
+  usePeriod,
+} from "./controls";
 import { USAGE_SCOPE, usageTotals } from "./fake-analysis";
 import {
   Badge,
@@ -179,6 +185,7 @@ function ConsumptionView({ initial }: { initial: Period }) {
         <ConsumptionChart
           period={period}
           visible={visible}
+          drill={drillProps(period, USAGE_SCOPE, change)}
           className="h-[clamp(260px,42vh,400px)]"
         />
         <Overview period={period} />

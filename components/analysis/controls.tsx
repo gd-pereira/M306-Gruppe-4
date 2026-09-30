@@ -9,10 +9,13 @@ import { Calendar } from "@/components/export/date-field";
 import { SegmentedTabs } from "@/components/import/table-parts";
 import { formatDay } from "@/components/export/fake-export";
 import { cn } from "@/lib/utils";
+import { localParts } from "./chart-axes";
 import { GAP_MONTHS, PARTIAL_MONTH } from "./fake-analysis";
 import {
   breadcrumb,
   clampDay,
+  drillDown,
+  drillLevel,
   intersect,
   LEVEL_LABELS,
   LEVELS,
@@ -37,6 +40,36 @@ export function usePeriod(initial: Period) {
     }));
   }
   return { ...state, change };
+}
+
+const DRILL_HINT: Record<Level, string> = {
+  day: "Klicken für die Tagesansicht",
+  week: "Klicken für die Wochenansicht",
+  month: "Klicken für die Monatsansicht",
+  year: "Klicken für die Jahresansicht",
+  all: "",
+};
+
+export interface Drill {
+  onSelect?: (ts: number) => void;
+  selectHint?: string;
+}
+
+// click in a chart opens the next level down at the clicked time
+export function drillProps(
+  period: Period,
+  scope: Scope,
+  onChange: (period: Period) => void,
+): Drill {
+  const level = drillLevel(period);
+  if (!level) return {};
+  return {
+    selectHint: DRILL_HINT[level],
+    onSelect: (ts) => {
+      const next = drillDown(period, localParts(ts).day, scope);
+      if (next) onChange(next);
+    },
+  };
 }
 
 export function Breadcrumb({

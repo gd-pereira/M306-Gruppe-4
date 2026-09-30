@@ -6,7 +6,13 @@ import {
   useReducedMotion,
   type Transition,
 } from "motion/react";
-import { useId, useState, type PointerEvent, type ReactNode } from "react";
+import {
+  useId,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 import { EASE_OUT } from "@/components/motion-provider";
 import { useElementSize } from "@/components/export/hooks";
 import { formatNumber } from "@/lib/format";
@@ -45,6 +51,8 @@ export function TimeChart({
   layers,
   pick,
   hover,
+  onSelect,
+  selectHint,
   className,
 }: {
   label: string;
@@ -60,6 +68,10 @@ export function TimeChart({
   // index of the point under the pointer, null for none
   pick: (ts: number, secondsPerPixel: number) => number | null;
   hover: (index: number, scale: Scale) => HoverContent | null;
+  // click in the plot, e.g. drill down to the clicked bucket
+  onSelect?: (ts: number) => void;
+  // last line of the tooltip when a click does something
+  selectHint?: string;
   className?: string;
 }) {
   const [plotRef, { width, height }] = useElementSize<HTMLDivElement>();
@@ -172,6 +184,8 @@ export function TimeChart({
               tooltipWidth={tooltipWidth}
               pick={pick}
               hover={hover}
+              onSelect={onSelect}
+              selectHint={selectHint}
             />
           </>
         )}
@@ -283,21 +297,37 @@ function HoverLayer({
   tooltipWidth,
   pick,
   hover,
+  onSelect,
+  selectHint,
 }: {
   scale: Scale;
   domain: [number, number];
   tooltipWidth: number;
   pick: (ts: number, secondsPerPixel: number) => number | null;
   hover: (index: number, scale: Scale) => HoverContent | null;
+  onSelect?: (ts: number) => void;
+  selectHint?: string;
 }) {
   const [index, setIndex] = useState<number | null>(null);
   const content = index === null ? null : hover(index, scale);
 
-  function onMove(event: PointerEvent<HTMLDivElement>) {
+  function pointer(event: MouseEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     const px = Math.min(Math.max(event.clientX - rect.left, 0), rect.width);
     const secondsPerPixel = (domain[1] - domain[0]) / Math.max(1, rect.width);
-    setIndex(pick(domain[0] + px * secondsPerPixel, secondsPerPixel));
+    return { ts: domain[0] + px * secondsPerPixel, secondsPerPixel };
+  }
+
+  function onMove(event: PointerEvent<HTMLDivElement>) {
+    const { ts, secondsPerPixel } = pointer(event);
+    setIndex(pick(ts, secondsPerPixel));
+  }
+
+  function onClick(event: MouseEvent<HTMLDivElement>) {
+    if (!onSelect) return;
+    // the index would point into the data of the next period
+    setIndex(null);
+    onSelect(pointer(event).ts);
   }
 
   const flip = content ? content.x + 16 + tooltipWidth > scale.width : false;
@@ -309,9 +339,10 @@ function HoverLayer({
 
   return (
     <div
-      className="absolute inset-0"
+      className={cn("absolute inset-0", onSelect && "cursor-zoom-in")}
       onPointerMove={onMove}
       onPointerLeave={() => setIndex(null)}
+      onClick={onClick}
     >
       {content && (
         <svg
@@ -344,6 +375,11 @@ function HoverLayer({
             transition={follow}
           >
             {content.tooltip}
+            {selectHint && (
+              <p className="mt-0.5 border-t border-white/10 pt-1.5 text-[11px] text-faint">
+                {selectHint}
+              </p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

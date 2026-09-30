@@ -12,6 +12,7 @@ import {
 import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
 import { localParts, shortRange, xTicksFor } from "./chart-axes";
+import type { Drill } from "./controls";
 import {
   eslAround,
   eslReadings,
@@ -80,10 +81,12 @@ function sourceOf(ts: number): string {
 export function MeterChart({
   sensor,
   period,
+  drill,
   className,
 }: {
   sensor: SensorId;
   period: Period;
+  drill?: Drill;
   className?: string;
 }) {
   const { range } = period;
@@ -230,6 +233,7 @@ export function MeterChart({
       layers={layers}
       pick={pick}
       hover={hover}
+      {...drill}
       className={className}
     />
   );

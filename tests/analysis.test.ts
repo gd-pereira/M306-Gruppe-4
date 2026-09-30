@@ -21,6 +21,7 @@ import {
 } from "@/components/analysis/fake-analysis";
 import {
   breadcrumb,
+  drillDown,
   isoWeek,
   pagerLabel,
   periodFromParams,
@@ -40,6 +41,30 @@ const april: Period = {
 };
 
 describe("period", () => {
+  it("drills from the whole range down to one day", () => {
+    const all = periodOf("all", DATA_END, USAGE_SCOPE);
+    const year = drillDown(all, "2021-04-07", USAGE_SCOPE)!;
+    expect(year).toEqual({
+      level: "year",
+      range: { from: "2021-01-01", to: "2021-12-31" },
+    });
+    const month = drillDown(year, "2021-04-07", USAGE_SCOPE)!;
+    expect(month).toEqual(april);
+    const day = drillDown(month, "2021-04-07", USAGE_SCOPE)!;
+    expect(day.range).toEqual({ from: "2021-04-07", to: "2021-04-07" });
+    expect(drillDown(day, "2021-04-07", USAGE_SCOPE)).toBeNull();
+    const week = periodOf("week", "2021-04-07", USAGE_SCOPE);
+    expect(drillDown(week, "2021-04-09", USAGE_SCOPE)?.level).toBe("day");
+    // a click behind the data end opens the last day with data
+    expect(
+      drillDown(
+        periodOf("month", DATA_END, USAGE_SCOPE),
+        "2021-09-20",
+        USAGE_SCOPE,
+      )?.range.from,
+    ).toBe(DATA_END);
+  });
+
   it("finds the level of a range from the url", () => {
     expect(
       periodFromParams({ von: "2021-04-01", bis: "2021-04-30" }, USAGE_SCOPE),

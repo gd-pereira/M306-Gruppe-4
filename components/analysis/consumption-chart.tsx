@@ -8,6 +8,7 @@ import { useElementSize } from "@/components/export/hooks";
 import { yTicks } from "@/components/export/fake-export";
 import { formatNumber } from "@/lib/format";
 import { bucketTitle, xTicksFor } from "./chart-axes";
+import type { Drill } from "./controls";
 import {
   rangeEnd,
   rangeStart,
@@ -55,10 +56,12 @@ export const SERIES: {
 export function ConsumptionChart({
   period,
   visible,
+  drill,
   className,
 }: {
   period: Period;
   visible: Record<SeriesKey, boolean>;
+  drill?: Drill;
   className?: string;
 }) {
   const { range } = period;
@@ -211,6 +214,7 @@ export function ConsumptionChart({
       layers={layers}
       pick={pick}
       hover={hover}
+      {...drill}
       className={className}
     />
   );

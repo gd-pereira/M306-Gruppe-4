@@ -17,7 +17,13 @@ import { SegmentedTabs } from "@/components/import/table-parts";
 import { buttonVariants } from "@/components/ui/button";
 import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
-import { Breadcrumb, LevelToggle, Pager, usePeriod } from "./controls";
+import {
+  Breadcrumb,
+  drillProps,
+  LevelToggle,
+  Pager,
+  usePeriod,
+} from "./controls";
 import {
   eslReadings,
   METER_SCOPE,
@@ -215,6 +221,7 @@ function MeterView({
           <MeterChart
             sensor={sensor}
             period={period}
+            drill={drillProps(period, METER_SCOPE, change)}
             className="h-[clamp(260px,42vh,400px)]"
           />
         </motion.section>
