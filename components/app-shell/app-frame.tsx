@@ -17,12 +17,16 @@ import { useDataSummary } from "./use-data-summary";
 export function AppFrame({ children }: { children: ReactNode }) {
   const hasData = useDataSummary() !== null;
   const onboarded = useOnboarded();
-  const fullscreen = !hasData && !onboarded;
+  // until hydration both sidebar and bar are rendered, css picks one via the boot script flag
+  const pending = onboarded === null && !hasData;
+  const showSidebar = hasData || onboarded !== false;
+  const showBar = !hasData && onboarded !== true;
   const pathname = usePathname();
   const router = useRouter();
   const reduceMotion = useReducedMotion();
-  const redirecting = fullscreen && pathname !== "/import";
-  // the onboarded flag only exists on the client, switching to it after hydration must not animate
+  const redirecting = !hasData && onboarded === false && pathname !== "/import";
+  const guarded = pending && pathname !== "/import";
+  // switching from the pending state after hydration must not animate
   const [ready, setReady] = useState(false);
   const play = ready && !reduceMotion;
 
@@ -32,7 +36,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (hasData && !onboarded) markOnboarded();
+    if (hasData && onboarded === false) markOnboarded();
   }, [hasData, onboarded]);
 
   useEffect(() => {
@@ -42,9 +46,11 @@ export function AppFrame({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh max-lg:hidden">
       <AnimatePresence initial={false}>
-        {!fullscreen && (
+        {showSidebar && (
           <motion.div
             key="sidebar"
+            data-frame-sidebar
+            data-pending={pending || undefined}
             initial={{ width: 0 }}
             animate={{ width: "auto" }}
             exit={{ width: 0 }}
@@ -58,9 +64,14 @@ export function AppFrame({ children }: { children: ReactNode }) {
         )}
       </AnimatePresence>
 
-      <main className="relative flex min-w-0 flex-1 flex-col gap-5 px-10 py-8">
+      <main
+        data-frame-guard={guarded || undefined}
+        className="relative flex min-w-0 flex-1 flex-col gap-5 px-10 py-8"
+      >
         <AnimatePresence initial={false} mode="popLayout">
-          {fullscreen && <FullscreenBar key="bar" play={play} />}
+          {showBar && (
+            <FullscreenBar key="bar" play={play} pending={pending} />
+          )}
         </AnimatePresence>
         {!redirecting && children}
       </main>
@@ -68,9 +79,11 @@ export function AppFrame({ children }: { children: ReactNode }) {
   );
 }
 
-function FullscreenBar({ play }: { play: boolean }) {
+function FullscreenBar({ play, pending }: { play: boolean; pending: boolean }) {
   return (
     <motion.header
+      data-frame-bar
+      data-pending={pending || undefined}
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, transition: { duration: play ? 0.15 : 0 } }}

@@ -260,6 +260,16 @@
   }
 }
 
+/* until react has hydrated, data-onboarded from the boot script decides between
+   sidebar and fullscreen import bar, so a reload does not flash the wrong one */
+html:not([data-onboarded]) [data-frame-sidebar][data-pending],
+html[data-onboarded] [data-frame-bar][data-pending] {
+  display: none;
+}
+html:not([data-onboarded]) main[data-frame-guard] > :not([data-frame-bar]) {
+  visibility: hidden;
+}
+
 /* until react has hydrated, the boot script in the root layout sets data-sidebar from localStorage
    so a collapsed sidebar does not flash open on reload */
 html[data-sidebar="collapsed"] [data-sidebar-frame][data-hydrated="false"] {

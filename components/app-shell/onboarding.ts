@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
+import { ONBOARDED_KEY } from "./sidebar-boot";
 
 // set after the first finished import, from then on the import is a normal page with sidebar
-const ONBOARDED_KEY = "flux-onboarded";
 
 const listeners = new Set<() => void>();
 
@@ -24,11 +24,13 @@ export function markOnboarded(): void {
   } catch {
     // storage blocked, the fullscreen import just shows again next time
   }
+  document.documentElement.dataset.onboarded = "";
   for (const listener of listeners) {
     listener();
   }
 }
 
-export function useOnboarded(): boolean {
-  return useSyncExternalStore(subscribe, read, () => false);
+// null while server rendering and hydrating, the boot script and css cover that moment
+export function useOnboarded(): boolean | null {
+  return useSyncExternalStore<boolean | null>(subscribe, read, () => null);
 }
