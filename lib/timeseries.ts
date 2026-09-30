@@ -15,28 +15,46 @@ export interface Gap {
 // then the value from the file with the newest creation date wins
 // (sdat placeholders with condition 21 were already removed by the parser)
 export function mergeSeries(series: Series[]): DataPoint[] {
-  // timestamp -> best value so far and the creation date of its file
-  const best = new Map<number, { value: number; createdAt: number }>();
+  return mergeSeriesWithSources(series).points;
+}
 
-  for (const { points, createdAt = 0 } of series) {
-    for (const point of points) {
+// same as mergeSeries, but also returns every series that gave at least one kept value
+// a file whose series are all missing here only had values that other files already had,
+// the import page shows it as duplicate
+export function mergeSeriesWithSources(series: Series[]): {
+  points: DataPoint[];
+  used: Set<Series>;
+} {
+  // timestamp -> best value so far, the creation date of its file and the series it came from
+  const best = new Map<
+    number,
+    { value: number; createdAt: number; source: Series }
+  >();
+
+  for (const source of series) {
+    const createdAt = source.createdAt ?? 0;
+
+    for (const point of source.points) {
       const current = best.get(point.ts);
 
       // take the value if we have none yet or if this file is newer
+      // on the same creation date the file that was read first stays
       if (current === undefined || createdAt > current.createdAt) {
-        best.set(point.ts, { value: point.value, createdAt });
+        best.set(point.ts, { value: point.value, createdAt, source });
       }
     }
   }
 
   // turn the map back into a normal list
-  const merged: DataPoint[] = [];
+  const points: DataPoint[] = [];
+  const used = new Set<Series>();
   for (const [ts, entry] of best) {
-    merged.push({ ts, value: entry.value });
+    points.push({ ts, value: entry.value });
+    used.add(entry.source);
   }
 
-  merged.sort((a, b) => a.ts - b.ts);
-  return merged;
+  points.sort((a, b) => a.ts - b.ts);
+  return { points, used };
 }
 
 // finds all places where values are missing

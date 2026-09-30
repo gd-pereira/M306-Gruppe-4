@@ -8,7 +8,7 @@ export const ZOOM_LEVELS = ["15min", "hour", "day", "week", "month"] as const;
 export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
 
 // a time bucket, start is included and end is not (unix seconds)
-interface Bucket {
+export interface Bucket {
   start: number;
   end: number;
 }
@@ -42,7 +42,7 @@ function zurichMidnight(year: number, month: number, day: number): number {
 // hours can be calculated directly because the swiss offset is always a full hour,
 // days, weeks and months start at midnight swiss time and are 23 or 25 hours longer or shorter
 // when the clock changes, so for those we go through the calendar
-function bucketAt(ts: number, level: ZoomLevel): Bucket {
+export function bucketAt(ts: number, level: ZoomLevel): Bucket {
   if (level === "15min" || level === "hour") {
     const length = level === "15min" ? INTERVAL : HOUR;
     const start = Math.floor(ts / length) * length;

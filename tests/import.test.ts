@@ -76,6 +76,71 @@ describe("import", () => {
     expect(parsed.errors[0].file).toBe("notes.txt");
   });
 
+  it("lists every file with type, sensor, direction, start and status", () => {
+    const result = importFixtures([
+      "sdat-ID742.xml",
+      "esl-2019-01.xml",
+      "sdat-ID26256.xml",
+      "sdat-broken.xml",
+    ]);
+
+    expect(result.files).toEqual([
+      {
+        file: "sdat-ID742.xml",
+        type: "sdat",
+        sensorIds: ["ID742"],
+        directions: ["consumption"],
+        from: result.consumption.usage["15min"][0].ts,
+        status: "imported",
+      },
+      {
+        file: "esl-2019-01.xml",
+        type: "esl",
+        sensorIds: ["ID742", "ID735"],
+        directions: ["consumption", "feedIn"],
+        from: result.consumption.esl[0].ts,
+        status: "imported",
+      },
+      {
+        file: "sdat-ID26256.xml",
+        type: "sdat",
+        sensorIds: ["ID26256"],
+        directions: [],
+        from: null,
+        status: "ignored",
+      },
+      {
+        file: "sdat-broken.xml",
+        type: "sdat",
+        sensorIds: [],
+        directions: [],
+        from: null,
+        status: "error",
+        message: result.errors[0].message,
+      },
+    ]);
+  });
+
+  it("a file whose values all came before is a duplicate", () => {
+    const result = importFixtures(["sdat-ID742.xml", "sdat-ID742.xml"]);
+
+    // same creation date, so the file read first keeps its values
+    expect(result.files.map((f) => f.status)).toEqual([
+      "imported",
+      "duplicate",
+    ]);
+  });
+
+  it("a file that is not xml has no type", () => {
+    const parsed = createParsedFiles();
+    addFile(parsed, "notes.txt", "hello");
+
+    expect(buildResult(parsed).files[0]).toMatchObject({
+      type: null,
+      status: "error",
+    });
+  });
+
   it("no files give an empty result", () => {
     const result = importFixtures([]);
 

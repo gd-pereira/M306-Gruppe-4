@@ -6,6 +6,7 @@ import {
   firstIndexFrom,
   INTERVAL,
   mergeSeries,
+  mergeSeriesWithSources,
   pointsInRange,
 } from "@/lib/timeseries";
 import type { DataPoint, Series } from "@/lib/types";
@@ -69,6 +70,28 @@ describe("mergeSeries", () => {
 });
 
 // esl files overlap too, e.g. the reading of 1 february is in several monthly exports
+describe("mergeSeriesWithSources", () => {
+  it("returns the series that gave at least one kept value", () => {
+    const older = series(100, [1, 1, 1]);
+    const newer = series(200, [2, 2], 1); // overwrites the last two values of older
+    const covered = series(50, [9]); // older than both, gives nothing
+
+    const { points, used } = mergeSeriesWithSources([older, newer, covered]);
+
+    expect(points.map((p) => p.value)).toEqual([1, 2, 2]);
+    expect(used).toEqual(new Set([older, newer]));
+  });
+
+  it("same creation date: the series read first stays", () => {
+    const first = series(100, [1]);
+    const second = series(100, [2]);
+
+    const { used } = mergeSeriesWithSources([first, second]);
+
+    expect(used).toEqual(new Set([first]));
+  });
+});
+
 describe("mergeSeries with ESL files", () => {
   function consumptionFrom(xml: string, file: string): Series {
     const result = parseEsl(xml, file);
