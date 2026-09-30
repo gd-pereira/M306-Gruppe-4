@@ -6,9 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useDataSummary } from "@/components/app-shell/use-data-summary";
 import { formatDay } from "@/components/export/fake-export";
 import { localParts } from "./chart-axes";
+import { Brush } from "./brush";
 import {
   ConsumptionChart,
-  Overview,
   SERIES,
   type SeriesKey,
 } from "./consumption-chart";
@@ -188,7 +188,7 @@ function ConsumptionView({ initial }: { initial: Period }) {
           drill={drillProps(period, USAGE_SCOPE, change)}
           className="h-[clamp(260px,42vh,400px)]"
         />
-        <Overview period={period} />
+        <Brush period={period} onChange={change} />
       </motion.section>
     </motion.div>
   );

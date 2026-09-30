@@ -4,7 +4,6 @@ import { area, curveMonotoneX, line } from "d3-shape";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo } from "react";
 import { EASE_OUT } from "@/components/motion-provider";
-import { useElementSize } from "@/components/export/hooks";
 import { yTicks } from "@/components/export/fake-export";
 import { formatNumber } from "@/lib/format";
 import { bucketTitle, xTicksFor } from "./chart-axes";
@@ -12,7 +11,6 @@ import type { Drill } from "./controls";
 import {
   rangeEnd,
   rangeStart,
-  USAGE_SCOPE,
   usageBuckets,
   usageRegions,
   type UsageBucket,
@@ -254,108 +252,5 @@ export function ConsumptionChart({
       {...drill}
       className={className}
     />
-  );
-}
-
-// the whole period with the shown part marked, room for the brush of T4-7
-export function Overview({ period }: { period: Period }) {
-  const [ref, { width }] = useElementSize<HTMLDivElement>();
-  const all = USAGE_SCOPE.all;
-  const months = useMemo(() => usageBuckets(all, "month"), [all]);
-  const t0 = rangeStart(all);
-  const t1 = rangeEnd(all);
-  const x = (ts: number) => ((ts - t0) / (t1 - t0)) * width;
-  const height = 32;
-  const top = Math.max(1, ...months.map((m) => m.consumption ?? 0));
-  const path =
-    width > 0
-      ? area<UsageBucket>()
-          .x((m) => x((m.start + m.end) / 2))
-          .y0(height)
-          .y1((m) => height - 4 - ((m.consumption ?? 0) / top) * (height - 8))
-          .curve(curveMonotoneX)(months)
-      : null;
-
-  const from = Math.max(t0, rangeStart(period.range));
-  const to = Math.min(t1, rangeEnd(period.range));
-  const windowWidth = Math.max(6, x(to) - x(from));
-  const windowX = Math.min(x(from), width - windowWidth);
-  const years = [2018, 2019, 2020, 2021];
-
-  return (
-    <div className="flex flex-col gap-1.5 border-t border-muted pt-3">
-      <span className="text-xs font-medium text-soft-foreground">
-        Übersicht
-      </span>
-      <div
-        ref={ref}
-        className="relative h-8 overflow-hidden rounded-md bg-surface"
-      >
-        {width > 0 && (
-          <svg
-            width={width}
-            height={height}
-            className="absolute inset-0"
-            aria-hidden
-          >
-            {path && (
-              <path d={path} fill="var(--border-strong)" fillOpacity={0.45} />
-            )}
-            {years.slice(1).map((year) => {
-              const lineX = x(
-                rangeStart({ from: `${year}-01-01`, to: `${year}-01-01` }),
-              );
-              return (
-                <line
-                  key={year}
-                  x1={lineX}
-                  x2={lineX}
-                  y1={0}
-                  y2={height}
-                  stroke="var(--border)"
-                />
-              );
-            })}
-            <motion.rect
-              y={0.5}
-              height={height - 1}
-              rx={4}
-              fill="var(--brand)"
-              fillOpacity={0.18}
-              stroke="var(--brand)"
-              initial={false}
-              animate={{ x: windowX, width: windowWidth }}
-              transition={{ duration: 0.4, ease: EASE_OUT }}
-            />
-          </svg>
-        )}
-      </div>
-      <div className="relative h-4 text-[11px] text-faint" aria-hidden>
-        {width > 0 &&
-          years.map((year) => {
-            const a = x(
-              rangeStart({ from: `${year}-01-01`, to: `${year}-01-01` }),
-            );
-            const b = Math.min(
-              width,
-              x(
-                rangeStart({
-                  from: `${year + 1}-01-01`,
-                  to: `${year + 1}-01-01`,
-                }),
-              ),
-            );
-            return (
-              <span
-                key={year}
-                className="absolute -translate-x-1/2"
-                style={{ left: (a + b) / 2 }}
-              >
-                {year}
-              </span>
-            );
-          })}
-      </div>
-    </div>
   );
 }
