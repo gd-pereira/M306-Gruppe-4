@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { MotionProvider } from "@/components/motion-provider";
+import { Toaster } from "@/components/ui/toaster";
 import { Sidebar } from "./sidebar";
 import { SmallScreenNotice } from "./small-screen-notice";
 
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+      <Toaster />
     </MotionProvider>
   );
 }

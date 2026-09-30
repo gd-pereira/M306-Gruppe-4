@@ -76,18 +76,23 @@ export function SegmentedTabs<T extends string>({
   options,
   value,
   onChange,
+  size = "sm",
 }: {
   label: string;
   options: TabOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  size?: "sm" | "md";
 }) {
   const pillId = useId();
   return (
     <div
       role="tablist"
       aria-label={label}
-      className="flex items-center gap-1 rounded-lg bg-background p-[3px]"
+      className={cn(
+        "flex w-fit items-center rounded-lg bg-background p-[3px]",
+        size === "sm" ? "gap-1" : "gap-0.5 rounded-[9px]",
+      )}
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -99,7 +104,10 @@ export function SegmentedTabs<T extends string>({
             aria-selected={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              "relative rounded-md px-2.5 py-[3px] text-xs font-medium whitespace-nowrap transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+              "relative rounded-md font-medium whitespace-nowrap transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+              size === "sm"
+                ? "px-2.5 py-[3px] text-xs"
+                : "px-4 py-[5px] text-[13px]",
               selected
                 ? "text-foreground"
                 : "text-muted-foreground hover:text-foreground",
