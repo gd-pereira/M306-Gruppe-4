@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { FluxLogo } from "@/components/brand/flux-logo";
 import { EASE_OUT, MotionProvider } from "@/components/motion-provider";
+import { endSession, startSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { checkPassword } from "./fake-auth";
 import { SamplePlot } from "./sample-plot";
@@ -171,9 +172,10 @@ function LoginForm() {
   const [status, setStatus] = useState<Status>("idle");
   const [wrong, setWrong] = useState(false);
 
+  // the login doubles as lock screen, reaching it always locks the app
   useEffect(() => {
-    router.prefetch("/");
-  }, [router]);
+    endSession();
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -188,6 +190,9 @@ function LoginForm() {
     if (ok) {
       setWrong(false);
       setStatus("open");
+      startSession();
+      // prefetching only now, before the session the proxy would answer with the login
+      router.prefetch("/");
       setTimeout(() => router.replace("/"), 450);
       return;
     }
