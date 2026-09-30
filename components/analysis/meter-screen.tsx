@@ -213,7 +213,7 @@ function MeterView({
               />
               <LegendPill
                 swatch={<DotSwatch color="var(--danger)" />}
-                label="Unvollständiger Monat"
+                label="Fehlende SDAT-Tage"
                 bordered={false}
               />
             </div>

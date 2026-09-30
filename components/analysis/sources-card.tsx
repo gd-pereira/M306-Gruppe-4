@@ -6,12 +6,10 @@ import { EASE_OUT } from "@/components/motion-provider";
 import { useElementSize } from "@/components/export/hooks";
 import {
   addDays,
-  dayKey,
   daysBetween,
   formatDay,
   formatDayRange,
   type DayKey,
-  type DayRange,
 } from "@/components/export/fake-export";
 import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
@@ -21,6 +19,7 @@ import {
   eslReadings,
   FIRST_ESL,
   gapDays,
+  gapMarks,
   gapsIn,
   rangeEnd,
   rangeStart,
@@ -29,7 +28,7 @@ import {
   sourceSegments,
   type SourceKind,
 } from "./fake-analysis";
-import { intersect, type Period } from "./period";
+import type { Period } from "./period";
 import { rise } from "./parts";
 
 const SEGMENT: Record<
@@ -59,11 +58,8 @@ const SEGMENT: Record<
 };
 
 const MIN_LABEL_GAP = 84;
-
-function monthOf(day: DayKey): DayRange {
-  const [y, m] = day.split("-").map(Number);
-  return { from: dayKey(y, m - 1, 1), to: dayKey(y, m, 0) };
-}
+// rough width of one character in the 10px labels, to keep them from overlapping
+const CHAR_WIDTH = 5.4;
 
 interface Item {
   swatch: string;
@@ -92,13 +88,7 @@ export function SourcesCard({
     width: (rangeEnd({ from, to }) - rangeStart({ from, to })) / (t1 - t0),
   });
 
-  // over several years whole months are marked, they would be too thin as days
-  const marks = long
-    ? [...new Set(gaps.map((gap) => gap.from.slice(0, 7)))].flatMap((month) => {
-        const inside = intersect(monthOf(`${month}-01`), range);
-        return inside ? [inside] : [];
-      })
-    : gaps;
+  const marks = useMemo(() => gapMarks(range), [range]);
 
   const boundaries = [
     ...segments.map((segment) => segment.range.from),
@@ -126,6 +116,33 @@ export function SourcesCard({
       text: reading ? `${date} · ESL ${formatNumber(reading.value, 1)}` : date,
     });
   });
+
+  const extent = (x: number, text: string, anchor: "start" | "mid" | "end") => {
+    const w = text.length * CHAR_WIDTH;
+    const from = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
+    return [from - 6, from + w + 6] as const;
+  };
+  const taken = labels.map((label, index) =>
+    extent(
+      label.x,
+      label.text,
+      index === 0 ? "start" : index === labels.length - 1 ? "end" : "mid",
+    ),
+  );
+  // the dates of the missing days under their red marks, left out where they would overlap
+  const gapLabels: { key: string; x: number; text: string }[] = [];
+  if (!long && width > 0) {
+    for (const mark of marks) {
+      const { left, width: share } = fraction(mark.from, mark.to);
+      const x = (left + share / 2) * width;
+      const text = shortRange(mark);
+      const [a, b] = extent(x, text, "mid");
+      if (a < 0 || b > width) continue;
+      if (taken.some(([c, d]) => a < d && b > c)) continue;
+      taken.push([a, b]);
+      gapLabels.push({ key: mark.from, x, text });
+    }
+  }
 
   const has = (kind: SourceKind) =>
     segments.find((segment) => segment.kind === kind);
@@ -276,6 +293,21 @@ export function SourcesCard({
                 {label.text}
               </span>
             ))}
+          <AnimatePresence initial={false}>
+            {gapLabels.map((label) => (
+              <motion.span
+                key={`${drawKey}-${label.key}`}
+                className="absolute top-0 -translate-x-1/2 whitespace-nowrap text-danger tabular-nums"
+                style={{ left: label.x }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                transition={{ duration: 0.3, delay: 0.45 }}
+              >
+                {label.text}
+              </motion.span>
+            ))}
+          </AnimatePresence>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import {
   formatDay,
   GAPS,
   yTicks,
+  type DayRange,
 } from "@/components/export/fake-export";
 import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
@@ -17,6 +18,8 @@ import {
   eslAround,
   eslReadings,
   FIRST_ESL,
+  gapMarks,
+  gapsIn,
   isIncomplete,
   meterLine,
   meterRegions,
@@ -113,6 +116,16 @@ export function MeterChart({
     return [start, ...after];
   }, [sensor, t1]);
   const regions = useMemo(() => meterRegions(range), [range]);
+  // centred on the red marks of the sources bar below the chart
+  const gapDots = useMemo(
+    () =>
+      gapMarks(range).flatMap((mark) => {
+        const ts = (rangeStart(mark) + rangeEnd(mark)) / 2;
+        const value = interpolate(points, ts);
+        return value === null ? [] : [{ key: mark.from, ts, value, mark }];
+      }),
+    [range, points],
+  );
   const xTicks = useMemo(
     () => xTicksFor(range, resolutionOf(period)),
     [range, period],
@@ -133,6 +146,7 @@ export function MeterChart({
   const drawKey = `${sensor}_${range.from}_${range.to}`;
   const lineTimes = points.map((point) => point.ts);
   const eslTimes = esl.map((reading) => reading.ts);
+  const gapTimes = gapDots.map((dot) => dot.ts);
 
   function layers(scale: Scale) {
     const path = line<MeterPoint>()
@@ -162,7 +176,7 @@ export function MeterChart({
             cy={scale.y(reading.value)}
             r={3.5}
             fill="var(--card)"
-            stroke={isIncomplete(reading) ? "var(--danger)" : "var(--primary)"}
+            stroke="var(--primary)"
             strokeWidth={1.5}
             style={{ transformBox: "fill-box", transformOrigin: "center" }}
             initial={{ opacity: 0, scale: 0.4 }}
@@ -170,27 +184,52 @@ export function MeterChart({
             transition={{ duration: 0.25, delay: 0.35 + index * 0.015 }}
           />
         ))}
+        {gapDots.map((dot, index) => (
+          <motion.circle
+            key={dot.key}
+            cx={scale.x(dot.ts)}
+            cy={scale.y(dot.value)}
+            r={3.5}
+            fill="var(--card)"
+            stroke="var(--danger)"
+            strokeWidth={1.5}
+            style={{ transformBox: "fill-box", transformOrigin: "center" }}
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.25, delay: 0.5 + index * 0.04 }}
+          />
+        ))}
       </g>
     );
   }
 
-  // an esl point close to the pointer wins, otherwise the line
+  // the nearest esl or gap dot close to the pointer wins, otherwise the line
   function pick(ts: number, secondsPerPixel: number): number | null {
+    const near = 12 * secondsPerPixel;
     const e = nearestIndex(eslTimes, ts);
-    if (e !== null && Math.abs(eslTimes[e] - ts) <= 12 * secondsPerPixel) {
-      return e;
-    }
+    const g = nearestIndex(gapTimes, ts);
+    const eDist = e === null ? Infinity : Math.abs(eslTimes[e] - ts);
+    const gDist = g === null ? Infinity : Math.abs(gapTimes[g] - ts);
+    if (g !== null && gDist <= near && gDist < eDist) return esl.length + g;
+    if (e !== null && eDist <= near) return e;
     const lastTs = lineTimes[lineTimes.length - 1];
     if (lastTs !== undefined && ts <= lastTs + 4 * secondsPerPixel) {
       const l = nearestIndex(lineTimes, ts);
-      return l === null ? null : esl.length + l;
+      return l === null ? null : esl.length + gapDots.length + l;
     }
     return e;
   }
 
   function hover(index: number, scale: Scale): HoverContent | null {
     if (index < esl.length) return eslHover(esl[index], scale);
-    const point = points[index - esl.length];
+    const dot = gapDots[index - esl.length];
+    if (dot) {
+      const next = eslReadings(sensor).find(
+        (reading) => reading.ts >= rangeEnd(dot.mark),
+      );
+      return gapHover(dot, next, scale);
+    }
+    const point = points[index - esl.length - gapDots.length];
     if (!point) return null;
     const x = scale.x(point.ts);
     const { day, time } = localParts(point.ts);
@@ -228,7 +267,7 @@ export function MeterChart({
       xTicks={xTicks}
       regions={regions}
       drawKey={drawKey}
-      yWidth={48}
+      yWidth={52}
       tooltipWidth={220}
       layers={layers}
       pick={pick}
@@ -251,7 +290,7 @@ function eslHover(reading: EslReading, scale: Scale): HoverContent {
         cy={scale.y(reading.value)}
         r={5.5}
         fill="var(--card)"
-        stroke={incomplete ? "var(--danger)" : "var(--primary)"}
+        stroke="var(--primary)"
         strokeWidth={2}
       />
     ),
@@ -277,6 +316,41 @@ function eslHover(reading: EslReading, scale: Scale): HoverContent {
           </>
         ) : (
           <TooltipRow label="Vormonat" value="erste Ablesung" tone="muted" />
+        )}
+      </>
+    ),
+  };
+}
+
+function gapHover(
+  dot: { ts: number; value: number; mark: DayRange },
+  next: EslReading | undefined,
+  scale: Scale,
+): HoverContent {
+  const x = scale.x(dot.ts);
+  return {
+    x,
+    marks: (
+      <circle
+        cx={x}
+        cy={scale.y(dot.value)}
+        r={5.5}
+        fill="var(--card)"
+        stroke="var(--danger)"
+        strokeWidth={2}
+      />
+    ),
+    tooltip: (
+      <>
+        <TooltipTitle>Fehlende SDAT-Tage</TooltipTitle>
+        <TooltipRow
+          label="SDAT fehlt"
+          value={gapsIn(dot.mark).map(shortRange).join(", ")}
+          tone="danger"
+        />
+        <TooltipRow label="Linie" value="gerade verbunden" tone="muted" />
+        {next && (
+          <TooltipRow label="Nächste ESL" value={formatDay(next.day)} />
         )}
       </>
     ),

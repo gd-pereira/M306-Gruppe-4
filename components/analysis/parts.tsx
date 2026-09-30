@@ -21,7 +21,13 @@ export const stagger = {
 };
 
 // the analysis pages need imported data, the sidebar links are locked until then
-export function NoData({ page }: { page: string }) {
+export function NoData({
+  page,
+  article = "Der",
+}: {
+  page: string;
+  article?: "Der" | "Die";
+}) {
   return (
     <motion.section
       {...rise}
@@ -33,8 +39,8 @@ export function NoData({ page }: { page: string }) {
       <div className="flex max-w-sm flex-col gap-1">
         <h2 className="text-[15px] font-semibold">Noch keine Daten</h2>
         <p className="text-sm text-muted-foreground">
-          Der {page} erscheint, sobald die SDAT- und ESL-Dateien importiert
-          sind.
+          {article} {page} erscheint, sobald die SDAT- und ESL-Dateien
+          importiert sind.
         </p>
       </div>
       <Link href="/import" className={buttonVariants({ size: "lg" })}>

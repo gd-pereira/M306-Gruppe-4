@@ -57,11 +57,14 @@ export function ConsumptionChart({
   period,
   visible,
   drill,
+  markGaps,
   className,
 }: {
   period: Period;
   visible: Record<SeriesKey, boolean>;
   drill?: Drill;
+  // red dot on buckets with missing sdat days
+  markGaps?: boolean;
   className?: string;
 }) {
   const { range } = period;
@@ -70,7 +73,11 @@ export function ConsumptionChart({
     () => usageBuckets(range, resolution),
     [range, resolution],
   );
-  const regions = useMemo(() => usageRegions(range), [range]);
+  // with the red dots the gap days need no shaded region
+  const regions = useMemo(
+    () => (markGaps ? [] : usageRegions(range)),
+    [range, markGaps],
+  );
   const xTicks = useMemo(
     () => xTicksFor(range, resolution),
     [range, resolution],
@@ -132,6 +139,36 @@ export function ConsumptionChart({
             );
           })}
         </AnimatePresence>
+        {markGaps && shown.length > 0 && (
+          <g>
+            {buckets.map((bucket, index) => {
+              const value = bucket[shown[0].key];
+              if (bucket.missingDays === 0 || value === null) return null;
+              return (
+                <motion.circle
+                  key={bucket.start}
+                  cx={scale.x(centers[index])}
+                  cy={scale.y(value)}
+                  r={3.5}
+                  fill="var(--danger)"
+                  stroke="var(--card)"
+                  strokeWidth={1.5}
+                  initial={{ opacity: 0, scale: 0.4 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{
+                    duration: 0.25,
+                    ease: EASE_OUT,
+                    delay: 0.6 + index * 0.01,
+                  }}
+                  style={{
+                    transformBox: "fill-box",
+                    transformOrigin: "center",
+                  }}
+                />
+              );
+            })}
+          </g>
+        )}
       </g>
     );
   }

@@ -18,6 +18,8 @@ import {
   usageBuckets,
   usageRegions,
   usageTotals,
+  valueCount,
+  yearTotals,
 } from "@/components/analysis/fake-analysis";
 import {
   breadcrumb,
@@ -166,6 +168,25 @@ describe("period", () => {
       ),
     ).toEqual(["Alles", "2021", "April", "KW 14"]);
     expect(isoWeek("2021-01-03")).toEqual({ week: 53, year: 2020 });
+  });
+});
+
+describe("dashboard data", () => {
+  it("splits the totals into calendar years", () => {
+    const years = yearTotals();
+    expect(years.map((y) => y.year)).toEqual([2018, 2019, 2020, 2021]);
+    expect(years[3]).toMatchObject({
+      partial: true,
+      range: { from: "2021-01-01", to: DATA_END },
+    });
+    const all = usageTotals(USAGE_SCOPE.data);
+    const sum = years.reduce((s, y) => s + y.consumption, 0);
+    expect(sum).toBeCloseTo(all.consumption, 3);
+  });
+
+  it("counts the 15 min values without the gap days", () => {
+    // 1'345 days minus 11 gap days, 96 values each, minus the hour of the dst switch in march 2021
+    expect(valueCount()).toBe((1345 - 11) * 96 - 4);
   });
 });
 

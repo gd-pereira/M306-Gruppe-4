@@ -214,6 +214,47 @@ export function usageTotals(range: DayRange): UsageTotals {
   return { consumption: c, feedIn: f, peak };
 }
 
+export interface YearTotals {
+  year: number;
+  range: DayRange;
+  consumption: number;
+  feedIn: number;
+  // the last year stops with the data
+  partial: boolean;
+}
+
+export function yearTotals(): YearTotals[] {
+  const { from, to } = USAGE_SCOPE.data;
+  const years: YearTotals[] = [];
+  for (
+    let year = Number(from.slice(0, 4));
+    year <= Number(to.slice(0, 4));
+    year++
+  ) {
+    const range = intersect(
+      { from: `${year}-01-01`, to: `${year}-12-31` },
+      USAGE_SCOPE.data,
+    )!;
+    const { consumption, feedIn } = usageTotals(range);
+    years.push({
+      year,
+      range,
+      consumption,
+      feedIn,
+      partial: range.to !== `${year}-12-31`,
+    });
+  }
+  return years;
+}
+
+// 15 min values per sensor, gap days have none
+export function valueCount(): number {
+  const { count, gap } = getGrid();
+  let missing = 0;
+  for (let i = 0; i < count; i++) missing += gap[i];
+  return count - missing;
+}
+
 export interface ChartRegion {
   key: string;
   from: number;
@@ -496,6 +537,24 @@ export function gapsIn(range: DayRange): DayRange[] {
     const inside = intersect(gap, range);
     return inside ? [inside] : [];
   });
+}
+
+function monthOf(day: DayKey): DayRange {
+  const [y, m] = day.split("-").map(Number);
+  return { from: dayKey(y, m - 1, 1), to: dayKey(y, m, 0) };
+}
+
+// red marks under the zählerstand chart and in the sources bar, both need the same x
+// over several years whole months are marked, single days would be too thin
+export function gapMarks(range: DayRange): DayRange[] {
+  const gaps = gapsIn(range);
+  if (daysBetween(range.from, range.to) <= 400) return gaps;
+  return [...new Set(gaps.map((gap) => gap.from.slice(0, 7)))].flatMap(
+    (month) => {
+      const inside = intersect(monthOf(`${month}-01`), range);
+      return inside ? [inside] : [];
+    },
+  );
 }
 
 export function gapDays(gaps: DayRange[]): number {
