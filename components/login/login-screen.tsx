@@ -36,7 +36,7 @@ const FORM_HEIGHT = 310;
 export function LoginScreen() {
   return (
     <MotionProvider>
-      <main className="grid min-h-dvh bg-background p-3 lg:grid-cols-[minmax(0,696px)_minmax(420px,1fr)]">
+      <main className="grid min-h-dvh bg-background lg:grid-cols-[minmax(0,696px)_minmax(420px,1fr)]">
         <BrandPanel />
         <section className="flex flex-col items-center justify-center px-6 py-16">
           <FluxLogo className="mb-12 h-8 w-auto text-foreground lg:hidden" />
@@ -72,7 +72,7 @@ function Rise({
 
 function BrandPanel() {
   return (
-    <aside className="relative hidden flex-col overflow-hidden rounded-[24px] bg-sidebar px-12 pt-11 pb-7 text-sidebar-accent-foreground lg:flex">
+    <aside className="relative hidden flex-col overflow-hidden bg-sidebar px-12 pt-11 pb-7 text-sidebar-accent-foreground lg:flex">
       <div
         aria-hidden
         className="absolute inset-0 bg-[linear-gradient(to_right,rgb(255_255_255/0.03)_1px,transparent_1px)] bg-size-[48px_100%]"
@@ -116,25 +116,32 @@ function BrandPanel() {
 
         <Rise
           index={3}
-          className="mt-[42px] max-w-[600px] rounded-[18px] border border-sidebar-card-border bg-sidebar-card p-5 shadow-[0_20px_40px_rgb(0_0_0/0.35)]"
+          className="mt-[42px] max-w-[600px] rounded-xl border border-sidebar-card-border bg-sidebar-card p-5"
         >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-semibold">Zählerstand</p>
-              <p className="mt-0.5 text-xs text-sidebar-placeholder">
-                Beispielansicht · kWh
-              </p>
-            </div>
-            <div className="mt-1 mr-[38px] flex gap-[77px] text-xs font-medium text-neutral-300">
-              <span className="flex items-center gap-1.5">
-                <span className="size-[7px] rounded-full bg-sidebar-accent-foreground" />
-                Bezug
+          <div className="flex items-baseline justify-between">
+            <p className="text-sm font-semibold">
+              Zählerstand
+              <span className="font-normal text-sidebar-placeholder"> · kWh</span>
+            </p>
+            <p className="text-xs text-sidebar-placeholder tabular-nums">
+              01.01.2018 – 06.09.2021
+            </p>
+          </div>
+          <div className="mt-2.5 flex gap-5 text-xs text-sidebar-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-0.5 w-3 rounded-full bg-sidebar-accent-foreground" />
+              Bezug
+              <span className="font-medium text-sidebar-accent-foreground tabular-nums">
+                50’865
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-[7px] rounded-full bg-brand" />
-                Einspeisung
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-0.5 w-3 rounded-full bg-brand" />
+              Einspeisung
+              <span className="font-medium text-sidebar-accent-foreground tabular-nums">
+                16’932
               </span>
-            </div>
+            </span>
           </div>
           <div className="mt-5">
             <SamplePlot />

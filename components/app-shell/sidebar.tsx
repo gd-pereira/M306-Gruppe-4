@@ -28,9 +28,9 @@ import { toggleSidebar, useSidebarPrefs } from "./sidebar-prefs";
 import { useHydrated, useModKeyLabel } from "./shortcuts";
 import { useDataSummary, type DataSummary } from "./use-data-summary";
 
-// 12 px gap to the window edge plus the sidebar itself (240 px open, 64 px collapsed)
-const OPEN_WIDTH = 252;
-const COLLAPSED_WIDTH = 76;
+// flush with the window edge, figma «Sidebar G · F in Zinc»
+const OPEN_WIDTH = 244;
+const COLLAPSED_WIDTH = 64;
 
 const FOCUS_RING =
   "focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none";
@@ -66,9 +66,9 @@ export function Sidebar() {
         initial={false}
         animate={{ width: collapsed ? COLLAPSED_WIDTH : OPEN_WIDTH }}
         transition={play ? { duration: 0.4, ease: EASE_OUT } : { duration: 0 }}
-        className="sticky top-0 flex h-dvh shrink-0 py-3 pl-3"
+        className="sticky top-0 flex h-dvh shrink-0"
       >
-        <aside className="relative flex-1 overflow-hidden rounded-[18px] bg-sidebar text-sidebar-foreground shadow-sidebar">
+        <aside className="relative flex-1 overflow-hidden bg-sidebar text-sidebar-foreground">
           <AnimatePresence initial={false} mode="popLayout" custom={play}>
             <motion.div
               key={collapsed ? "collapsed" : "open"}
@@ -93,16 +93,8 @@ export function Sidebar() {
   );
 }
 
-function Glow({ className }: { className: string }) {
-  return (
-    <div
-      aria-hidden
-      className={cn(
-        "pointer-events-none absolute -top-[70px] -left-[60px] rounded-full bg-brand/16 blur-[30px]",
-        className,
-      )}
-    />
-  );
+function Divider() {
+  return <div aria-hidden className="h-px shrink-0 bg-sidebar-subtle" />;
 }
 
 function OpenSidebar({
@@ -116,10 +108,8 @@ function OpenSidebar({
   const mod = useModKeyLabel();
 
   return (
-    <div className="relative flex h-full w-60 flex-col p-3.5">
-      <Glow className="h-40 w-[220px]" />
-
-      <div className="relative flex items-center justify-between py-1 pr-0.5 pl-1.5">
+    <div className="flex h-full w-61 flex-col px-3.5 pt-4 pb-3.5">
+      <div className="flex items-center justify-between pr-0.5 pb-[18px] pl-1.5">
         <FluxLogo className="h-7 w-auto text-sidebar-accent-foreground" />
         <Tooltip label="Sidebar einklappen" sideOffset={24}>
           <button
@@ -141,39 +131,45 @@ function OpenSidebar({
         onClick={() => setCommandPaletteOpen(true)}
         aria-keyshortcuts="Control+K Meta+K"
         className={cn(
-          "relative mt-[18px] flex h-9 shrink-0 items-center gap-2 rounded-[10px] border border-sidebar-card-border bg-sidebar-card pr-2 pl-2.5 text-left text-sidebar-placeholder transition-colors duration-150 hover:border-sidebar-border hover:text-sidebar-foreground active:translate-y-px",
+          "flex h-9 shrink-0 items-center gap-2 rounded-[10px] border border-sidebar-card-border bg-sidebar-card pr-1.5 pl-2.5 text-left text-sidebar-placeholder transition-colors duration-150 hover:border-sidebar-border hover:text-sidebar-foreground active:translate-y-px",
           FOCUS_RING,
         )}
       >
-        <Search className="size-4" aria-hidden />
+        <Search className="size-[15px]" aria-hidden />
         <span className="flex-1 text-[13px]">Suchen …</span>
-        <kbd className="rounded-[5px] border border-sidebar-border bg-sidebar-accent px-[5px] py-px font-mono text-[10px] font-medium text-sidebar-icon">
+        <kbd className="rounded-[5px] bg-sidebar-accent px-[5px] py-px font-mono text-[10px] font-medium text-sidebar-placeholder">
           {mod} K
         </kbd>
       </button>
 
-      {/* scrolls on short windows, the negative margin keeps the active indicator and focus rings visible */}
+      {/* scrolls on short windows, the negative margin keeps the focus rings visible */}
       <nav
         aria-label="Hauptnavigation"
-        className="relative mt-[22px] -mr-1 -ml-4 flex min-h-0 [scrollbar-width:none] flex-col gap-5 overflow-y-auto py-0.5 pr-1 pl-4"
+        className="mt-[22px] -mx-1 flex min-h-0 [scrollbar-width:none] flex-col gap-3 overflow-y-auto px-1 py-0.5"
       >
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="flex flex-col gap-0.5">
-            <GroupLabel>{group.label}</GroupLabel>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.href}
-                item={item}
-                active={pathname === item.href}
-                disabled={item.needsData && !summary}
-                badge={
-                  item.href === "/import" && summary
-                    ? formatNumber(summary.fileCount)
-                    : undefined
-                }
-              />
-            ))}
-          </div>
+        {NAV_GROUPS.map((group, index) => (
+          <Fragment key={group.label}>
+            {index > 0 && <Divider />}
+            <div
+              role="group"
+              aria-label={group.label}
+              className="flex flex-col gap-0.5"
+            >
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  active={pathname === item.href}
+                  disabled={item.needsData && !summary}
+                  badge={
+                    item.href === "/import" && summary
+                      ? formatNumber(summary.fileCount)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </Fragment>
         ))}
 
         <RecentGroup views={summary ? recent : []} />
@@ -181,21 +177,20 @@ function OpenSidebar({
 
       <div className="min-h-3 flex-1" />
 
+      <Divider />
       <EnergyBalance summary={summary} />
+      <div className="h-3 shrink-0" />
+      <Divider />
 
-      <div className="my-3 h-px shrink-0 bg-sidebar-subtle" />
-
-      <div className="flex shrink-0 items-center justify-between pl-1">
+      <div className="flex shrink-0 items-center justify-between pt-3 pl-1.5">
         <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <span className="flex size-2.5 items-center justify-center rounded-full bg-success/22">
-              <span className="size-1.5 rounded-full bg-success" />
-            </span>
+          <div className="flex items-center gap-1.5">
+            <span className="size-1.5 rounded-full bg-success" />
             <span className="text-xs font-medium text-sidebar-accent-foreground">
               Lokal gespeichert
             </span>
           </div>
-          <span className="pl-[18px] text-[11px] text-sidebar-muted">
+          <span className="text-[11px] text-sidebar-muted">
             Nichts verlässt den Browser
           </span>
         </div>
@@ -204,11 +199,11 @@ function OpenSidebar({
             href="/login"
             aria-label="App sperren"
             className={cn(
-              "flex size-8 items-center justify-center rounded-[10px] border border-sidebar-border bg-sidebar-accent text-sidebar-icon transition-colors duration-150 hover:text-sidebar-accent-foreground active:translate-y-px",
+              "flex size-8 items-center justify-center rounded-[10px] bg-sidebar-accent text-sidebar-placeholder transition-colors duration-150 hover:text-sidebar-accent-foreground active:translate-y-px",
               FOCUS_RING,
             )}
           >
-            <Lock className="size-4" />
+            <Lock className="size-[15px]" />
           </Link>
         </Tooltip>
       </div>
@@ -216,30 +211,14 @@ function OpenSidebar({
   );
 }
 
-function GroupLabel({ children }: { children: string }) {
-  return (
-    <p className="pb-1.5 pl-2.5 text-[10.5px] font-medium tracking-[0.08em] text-sidebar-muted uppercase">
-      {children}
-    </p>
-  );
-}
-
-// glides to the new page instead of jumping, one id per sidebar state
-function ActiveIndicator({
-  state,
-  className,
-}: {
-  state: "open" | "collapsed";
-  className: string;
-}) {
+// amber tint that glides to the new page instead of jumping, one id per sidebar state
+function ActiveTint({ state }: { state: "open" | "collapsed" }) {
   return (
     <motion.span
-      layoutId={`nav-indicator-${state}`}
+      aria-hidden
+      layoutId={`nav-active-${state}`}
       transition={{ duration: 0.35, ease: EASE_OUT }}
-      className={cn(
-        "absolute h-4 w-[3px] rounded-r-[3px] bg-sidebar-primary",
-        className,
-      )}
+      className="absolute inset-0 -z-10 rounded-lg bg-sidebar-primary/12"
     />
   );
 }
@@ -257,9 +236,8 @@ function NavLink({
 }) {
   const Icon = item.icon;
   const className = cn(
-    "relative flex h-9 items-center gap-2.5 rounded-[10px] border border-transparent pr-2 pl-2.5 text-sm font-medium",
-    active &&
-      "border-sidebar-border bg-sidebar-accent font-semibold text-sidebar-accent-foreground drop-shadow-[0_1px_1px_rgb(0_0_0/0.3)]",
+    "relative isolate flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13px]",
+    active && "font-medium text-sidebar-primary",
     !active && disabled && "cursor-default text-sidebar-disabled",
     !active &&
       !disabled &&
@@ -270,10 +248,11 @@ function NavLink({
   );
   const content = (
     <>
+      {active && <ActiveTint state="open" />}
       <Icon
         aria-hidden
         className={cn(
-          "size-[18px] shrink-0",
+          "size-4 shrink-0",
           active
             ? "text-sidebar-primary"
             : disabled
@@ -283,12 +262,9 @@ function NavLink({
       />
       <span className="flex-1">{item.label}</span>
       {badge && (
-        <span className="rounded-full bg-sidebar-subtle px-[7px] py-px text-[11px] font-medium">
+        <span className="rounded-md bg-sidebar-accent px-1.5 py-px text-[11px] font-medium text-sidebar-placeholder">
           {badge}
         </span>
-      )}
-      {active && (
-        <ActiveIndicator state="open" className="top-1/2 -left-4 -mt-2" />
       )}
     </>
   );
@@ -335,27 +311,39 @@ function RecentGroup({ views }: { views: RecentView[] }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, transition: { duration: 0.15 } }}
           transition={{ duration: 0.35, ease: EASE_OUT }}
-          className="flex flex-col gap-0.5"
+          className="flex flex-col gap-3"
         >
-          <GroupLabel>Zuletzt angesehen</GroupLabel>
-          <AnimatePresence initial={false} mode="popLayout">
-            {views.map((view, index) => (
-              <motion.div
-                key={`${view.page}|${view.label}`}
-                layout="position"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, transition: { duration: 0.15 } }}
-                transition={{
-                  duration: 0.35,
-                  ease: EASE_OUT,
-                  delay: index * 0.04,
-                }}
-              >
-                <RecentLink view={view} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
+          <Divider />
+          <div
+            role="group"
+            aria-labelledby="recent-views-label"
+            className="flex flex-col gap-0.5"
+          >
+            <p
+              id="recent-views-label"
+              className="pb-1 pl-2.5 text-[11px] font-medium text-sidebar-muted"
+            >
+              Zuletzt angesehen
+            </p>
+            <AnimatePresence initial={false} mode="popLayout">
+              {views.map((view, index) => (
+                <motion.div
+                  key={`${view.page}|${view.label}`}
+                  layout="position"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                  transition={{
+                    duration: 0.35,
+                    ease: EASE_OUT,
+                    delay: index * 0.04,
+                  }}
+                >
+                  <RecentLink view={view} />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -369,35 +357,31 @@ function RecentLink({ view }: { view: RecentView }) {
     <Link
       href={view.href}
       className={cn(
-        "flex h-10 items-center gap-2.5 rounded-[10px] px-2 transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-accent-foreground",
+        "flex h-[30px] items-center gap-2.5 rounded-lg px-2.5 transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-accent-foreground",
         FOCUS_RING,
       )}
     >
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-[7px] border border-sidebar-card-border bg-sidebar-hover">
-        <Icon aria-hidden className="size-[13px] text-sidebar-icon" />
+      <Icon aria-hidden className="size-3.5 shrink-0 text-sidebar-icon" />
+      <span className="min-w-0 flex-1 truncate text-[12.5px]">
+        {view.label}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[13px] font-medium">{view.label}</span>
-        <span className="truncate text-[11px] text-sidebar-muted">
-          {nav?.label}
-        </span>
+      <span className="shrink-0 text-[11px] text-sidebar-muted">
+        {nav?.label}
       </span>
     </Link>
   );
 }
 
 function EnergyBalance({ summary }: { summary: DataSummary | null }) {
-  const max = summary ? Math.max(summary.consumptionKwh, summary.feedInKwh) : 0;
+  const total = summary ? summary.consumptionKwh + summary.feedInKwh : 0;
   const rows = [
     {
       label: "Bezug",
-      dot: "bg-sidebar-accent-foreground",
       fill: "bg-sidebar-accent-foreground",
       kwh: summary?.consumptionKwh,
     },
     {
       label: "Einspeisung",
-      dot: "bg-brand",
       fill: "bg-brand",
       kwh: summary?.feedInKwh,
     },
@@ -406,7 +390,7 @@ function EnergyBalance({ summary }: { summary: DataSummary | null }) {
   return (
     <section
       aria-label="Energiebilanz"
-      className="flex shrink-0 flex-col gap-3 rounded-[14px] border border-sidebar-card-border bg-sidebar-card p-3.5"
+      className="flex shrink-0 flex-col gap-2.5 px-1.5 pt-3.5"
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-sidebar-accent-foreground">
@@ -419,32 +403,40 @@ function EnergyBalance({ summary }: { summary: DataSummary | null }) {
         </span>
       </div>
 
+      {total > 0 ? (
+        <motion.div
+          aria-hidden
+          className="flex h-1.5 origin-left gap-0.5"
+          initial={{ scaleX: 0, opacity: 0 }}
+          animate={{ scaleX: 1, opacity: 1 }}
+          transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.15 }}
+        >
+          {rows.map((row) => (
+            <div
+              key={row.label}
+              className={cn("h-full basis-0 rounded-[3px]", row.fill)}
+              style={{ flexGrow: row.kwh }}
+            />
+          ))}
+        </motion.div>
+      ) : (
+        <div aria-hidden className="h-1.5 rounded-[3px] bg-sidebar-track" />
+      )}
+
       {rows.map((row) => (
-        <div key={row.label} className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-xs">
-              <span className={cn("size-1.5 rounded-full", row.dot)} />
-              {row.label}
-            </span>
-            <span
-              className={cn(
-                "font-mono text-xs font-medium",
-                row.kwh === undefined
-                  ? "text-sidebar-muted"
-                  : "text-sidebar-accent-foreground",
-              )}
-            >
-              {row.kwh === undefined ? "–" : `${formatNumber(row.kwh)} kWh`}
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-[3px] bg-sidebar-track">
-            {row.kwh !== undefined && max > 0 && (
-              <div
-                className={cn("h-full rounded-[3px]", row.fill)}
-                style={{ width: `${(row.kwh / max) * 100}%` }}
-              />
+        <div key={row.label} className="flex items-center gap-1.5">
+          <span className={cn("size-[5px] rounded-full", row.fill)} />
+          <span className="flex-1 text-[11.5px]">{row.label}</span>
+          <span
+            className={cn(
+              "text-[11px] font-medium tabular-nums",
+              row.kwh === undefined
+                ? "text-sidebar-muted"
+                : "text-sidebar-accent-foreground",
             )}
-          </div>
+          >
+            {row.kwh === undefined ? "–" : `${formatNumber(row.kwh)} kWh`}
+          </span>
         </div>
       ))}
 
@@ -472,10 +464,8 @@ function CollapsedSidebar({
   const mod = useModKeyLabel();
 
   return (
-    <div className="relative flex h-full w-16 flex-col items-center px-2.5 py-3.5">
-      <Glow className="size-[140px]" />
-
-      <FluxMark className="relative h-7 w-[30.4px] shrink-0 text-sidebar-accent-foreground" />
+    <div className="flex h-full w-16 flex-col items-center px-2.5 pt-4 pb-3.5">
+      <FluxMark className="h-7 w-[30.4px] shrink-0 text-sidebar-accent-foreground" />
 
       <Tooltip label="Suchen" shortcut={`${mod} K`} delay={250} sideOffset={18}>
         <button
@@ -484,7 +474,7 @@ function CollapsedSidebar({
           aria-label="Suchen"
           aria-keyshortcuts="Control+K Meta+K"
           className={cn(
-            "relative mt-5 flex h-10 w-11 shrink-0 items-center justify-center rounded-[10px] border border-sidebar-card-border bg-sidebar-card text-sidebar-icon transition-colors duration-150 hover:border-sidebar-border hover:text-sidebar-accent-foreground active:translate-y-px",
+            "mt-5 flex h-10 w-11 shrink-0 items-center justify-center rounded-[10px] border border-sidebar-card-border bg-sidebar-card text-sidebar-placeholder transition-colors duration-150 hover:border-sidebar-border hover:text-sidebar-accent-foreground active:translate-y-px",
             FOCUS_RING,
           )}
         >
@@ -494,12 +484,12 @@ function CollapsedSidebar({
 
       <nav
         aria-label="Hauptnavigation"
-        className="relative mt-[18px] flex min-h-0 flex-col items-center"
+        className="mt-[18px] flex min-h-0 flex-col items-center"
       >
         {NAV_GROUPS.map((group, index) => (
           <Fragment key={group.label}>
             {index > 0 && (
-              <div aria-hidden className="my-2.5 h-px w-5 bg-sidebar-subtle" />
+              <div aria-hidden className="my-2.5 h-px w-6 bg-sidebar-subtle" />
             )}
             <div
               role="group"
@@ -548,11 +538,11 @@ function CollapsedSidebar({
           href="/login"
           aria-label="App sperren"
           className={cn(
-            "relative mt-1 flex h-9 w-10 shrink-0 items-center justify-center rounded-[10px] border border-sidebar-border bg-sidebar-accent text-sidebar-icon transition-colors duration-150 hover:text-sidebar-accent-foreground active:translate-y-px",
+            "relative mt-1 flex h-9 w-10 shrink-0 items-center justify-center rounded-[10px] bg-sidebar-accent text-sidebar-placeholder transition-colors duration-150 hover:text-sidebar-accent-foreground active:translate-y-px",
             FOCUS_RING,
           )}
         >
-          <Lock className="size-4" />
+          <Lock className="size-[15px]" />
           <span
             aria-hidden
             className="absolute -top-0.5 right-0.5 size-2 rounded-full bg-success"
@@ -576,8 +566,7 @@ function CollapsedNavLink({
 }) {
   const Icon = item.icon;
   const className = cn(
-    "relative flex h-10 w-11 items-center justify-center rounded-[10px] border border-transparent",
-    active && "border-sidebar-border bg-sidebar-accent",
+    "relative isolate flex h-10 w-11 items-center justify-center rounded-lg",
     !active && disabled && "cursor-default",
     !active &&
       !disabled &&
@@ -585,6 +574,7 @@ function CollapsedNavLink({
   );
   const content = (
     <>
+      {active && <ActiveTint state="collapsed" />}
       <Icon
         aria-hidden
         className={cn(
@@ -600,12 +590,6 @@ function CollapsedNavLink({
         <span
           aria-hidden
           className="absolute top-[7px] left-[31px] size-[7px] rounded-full bg-sidebar-primary"
-        />
-      )}
-      {active && (
-        <ActiveIndicator
-          state="collapsed"
-          className="top-[11px] -left-[11px]"
         />
       )}
     </>

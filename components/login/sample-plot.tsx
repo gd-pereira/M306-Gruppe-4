@@ -13,45 +13,45 @@ const EINSPEISUNG =
 const WIDTH = 556;
 const HEIGHT = 176;
 const GRID = [2, 59.3, 116.7, 174];
+const YEARS = ["2018", "2019", "2020", "2021"];
 const REVEAL = { duration: 1.4, delay: 0.5, ease: EASE_OUT };
 
 const LINES = [
-  { d: BEZUG, color: "#fafafa", top: 17.9, fill: 0.1, halo: 0.15 },
-  { d: EINSPEISUNG, color: "var(--brand)", top: 107, fill: 0.28, halo: 0.2 },
+  { d: BEZUG, color: "var(--sidebar-accent-foreground)", top: 17.9 },
+  { d: EINSPEISUNG, color: "var(--brand)", top: 107 },
 ];
 
 // decorative sample for the lock screen, no real values behind it
 export function SamplePlot() {
   return (
-    <div className="relative h-[176px]" aria-hidden>
-      <Lines />
-      {LINES.map((line, i) => (
-        <motion.span
-          key={i}
-          className="absolute -right-2 size-4 rounded-full"
-          style={{
-            top: line.top - 8,
-            backgroundColor: `color-mix(in srgb, ${line.color} ${line.halo * 100}%, transparent)`,
-          }}
-          initial={{ opacity: 0, scale: 0.4 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{
-            duration: 0.35,
-            delay: REVEAL.delay + REVEAL.duration * 0.75 + i * 0.06,
-            ease: EASE_OUT,
-          }}
-        >
-          <span
-            className="absolute inset-[4.5px] rounded-full"
-            style={{ backgroundColor: line.color }}
+    <div aria-hidden>
+      <div className="relative h-[176px]">
+        <Lines />
+        {LINES.map((line, i) => (
+          <motion.span
+            key={i}
+            className="absolute -right-[3px] size-1.5 rounded-full"
+            style={{ top: line.top - 3, backgroundColor: line.color }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{
+              duration: 0.25,
+              delay: REVEAL.delay + REVEAL.duration * 0.75,
+              ease: EASE_OUT,
+            }}
           />
-        </motion.span>
-      ))}
+        ))}
+      </div>
+      <div className="mt-2 flex justify-between text-[11px] text-sidebar-muted tabular-nums">
+        {YEARS.map((year) => (
+          <span key={year}>{year}</span>
+        ))}
+      </div>
     </div>
   );
 }
 
-// stretched to the card width, so strokes stay 2px via non-scaling-stroke
+// stretched to the card width, so strokes stay crisp via non-scaling-stroke
 function Lines() {
   const id = useId();
 
@@ -62,20 +62,6 @@ function Lines() {
       className="absolute inset-0 size-full"
     >
       <defs>
-        {LINES.map((line, i) => (
-          <linearGradient
-            key={i}
-            id={`${id}-fill-${i}`}
-            x1="0"
-            y1={line.top}
-            x2="0"
-            y2="174"
-            gradientUnits="userSpaceOnUse"
-          >
-            <stop stopColor={line.color} stopOpacity={line.fill} />
-            <stop offset="1" stopColor={line.color} stopOpacity="0" />
-          </linearGradient>
-        ))}
         <clipPath id={`${id}-reveal`}>
           <motion.rect
             width={WIDTH}
@@ -92,7 +78,8 @@ function Lines() {
         <path
           key={y}
           d={`M0 ${y}H${WIDTH}`}
-          stroke="#222225"
+          stroke="var(--sidebar-subtle)"
+          strokeDasharray="2 4"
           vectorEffect="non-scaling-stroke"
         />
       ))}
@@ -100,24 +87,16 @@ function Lines() {
       <g clipPath={`url(#${id}-reveal)`}>
         {LINES.map((line, i) => (
           <path
-            key={`area-${i}`}
-            d={`${line.d}V174H0Z`}
-            fill={`url(#${id}-fill-${i})`}
-          />
-        ))}
-        {LINES.map((line, i) => (
-          <path
-            key={`line-${i}`}
+            key={i}
             d={line.d}
             stroke={line.color}
-            strokeWidth={2}
+            strokeWidth={1.5}
             strokeLinejoin="round"
             fill="none"
             vectorEffect="non-scaling-stroke"
           />
         ))}
       </g>
-
     </svg>
   );
 }

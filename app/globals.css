@@ -41,7 +41,6 @@
   --color-sidebar-track: var(--sidebar-track);
   --color-sidebar-kbd: var(--sidebar-kbd);
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 28px rgb(0 0 0 / 0.05);
-  --shadow-sidebar: 0 12px 32px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.08);
   --radius-card: 12px;
   --text-xs--line-height: normal;
   --text-sm--line-height: normal;
@@ -158,24 +157,24 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: #0b0b0c;
-  --sidebar-foreground: #a1a1a1;
+  --sidebar: #18181b;
+  --sidebar-foreground: #d4d4d8;
   --sidebar-primary: #ffb603;
   --sidebar-primary-foreground: #171717;
-  --sidebar-accent: #1c1c1f;
+  --sidebar-accent: #27272a;
   --sidebar-accent-foreground: #fafafa;
-  --sidebar-border: #2a2a2e;
-  --sidebar-ring: #5c5c5c;
-  --sidebar-muted: #5c5c5c;
-  --sidebar-icon: #8a8a8a;
-  --sidebar-placeholder: #6b6b6b;
-  --sidebar-disabled: #474747;
-  --sidebar-hover: #161618;
-  --sidebar-card: #141416;
-  --sidebar-card-border: #222225;
-  --sidebar-subtle: #1f1f22;
-  --sidebar-track: #232326;
-  --sidebar-kbd: #26262a;
+  --sidebar-border: #34343a;
+  --sidebar-ring: #71717a;
+  --sidebar-muted: #71717a;
+  --sidebar-icon: #a1a1aa;
+  --sidebar-placeholder: #71717a;
+  --sidebar-disabled: #52525b;
+  --sidebar-hover: rgb(255 255 255 / 0.04);
+  --sidebar-card: rgb(255 255 255 / 0.05);
+  --sidebar-card-border: rgb(255 255 255 / 0.08);
+  --sidebar-subtle: rgb(255 255 255 / 0.07);
+  --sidebar-track: #27272a;
+  --sidebar-kbd: #3f3f46;
   --chart-background: oklch(1 0 0);
   --chart-foreground: oklch(0.145 0.004 285);
   --chart-foreground-muted: oklch(0.55 0.014 260);
@@ -264,7 +263,7 @@
 /* until react has hydrated, the boot script in the root layout sets data-sidebar from localStorage
    so a collapsed sidebar does not flash open on reload */
 html[data-sidebar="collapsed"] [data-sidebar-frame][data-hydrated="false"] {
-  width: 76px !important;
+  width: 64px !important;
 }
 html[data-sidebar="collapsed"]
   [data-sidebar-frame][data-hydrated="false"]
