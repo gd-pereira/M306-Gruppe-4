@@ -8,7 +8,13 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { FluxLogo } from "@/components/brand/flux-logo";
 import { EASE_OUT, MotionProvider } from "@/components/motion-provider";
 import { endSession, startSession } from "@/lib/session";
@@ -55,7 +61,11 @@ function Rise({
       className={className}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay: 0.08 + index * 0.05, ease: EASE_OUT }}
+      transition={{
+        duration: 0.45,
+        delay: 0.08 + index * 0.05,
+        ease: EASE_OUT,
+      }}
     >
       {children}
     </motion.div>
@@ -113,7 +123,10 @@ function BrandPanel() {
           <div className="flex items-baseline justify-between">
             <p className="text-sm font-semibold">
               Zählerstand
-              <span className="font-normal text-sidebar-placeholder"> · kWh</span>
+              <span className="font-normal text-sidebar-placeholder">
+                {" "}
+                · kWh
+              </span>
             </p>
             <p className="text-xs text-sidebar-placeholder tabular-nums">
               01.01.2018 – 06.09.2021
@@ -257,7 +270,7 @@ function LoginForm() {
             onClick={() => setVisible((shown) => !shown)}
             aria-label={visible ? "Passwort verbergen" : "Passwort anzeigen"}
             aria-pressed={visible}
-            className="relative flex size-8 shrink-0 items-center justify-center rounded-md text-neutral-500 outline-none transition-colors duration-150 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-ring"
+            className="relative flex size-8 shrink-0 items-center justify-center rounded-md text-neutral-500 transition-colors duration-150 outline-none hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-ring"
           >
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.span
@@ -304,7 +317,7 @@ function LoginForm() {
           disabled={status !== "idle"}
           whileTap={status === "idle" ? { scale: 0.98 } : undefined}
           transition={{ duration: 0.15, ease: EASE_OUT }}
-          className="mt-4 flex h-10 w-full items-center justify-center overflow-hidden rounded-lg bg-brand text-sm font-semibold text-brand-foreground outline-none transition-[filter] duration-150 hover:brightness-[0.96] focus-visible:ring-[3px] focus-visible:ring-neutral-900/20 disabled:cursor-default"
+          className="mt-4 flex h-10 w-full items-center justify-center overflow-hidden rounded-lg bg-brand text-sm font-semibold text-brand-foreground transition-[filter] duration-150 outline-none hover:brightness-[0.96] focus-visible:ring-[3px] focus-visible:ring-neutral-900/20 disabled:cursor-default"
         >
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.span

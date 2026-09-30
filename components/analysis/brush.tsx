@@ -186,7 +186,10 @@ export function Brush({
         update({ from: day < origin.to ? day : origin.to, to: origin.to });
         break;
       case "end":
-        update({ from: origin.from, to: day > origin.from ? day : origin.from });
+        update({
+          from: origin.from,
+          to: day > origin.from ? day : origin.from,
+        });
         break;
       case "new":
         update(
@@ -301,7 +304,7 @@ export function Brush({
       <div
         ref={ref}
         className={cn(
-          "relative h-11 touch-none rounded-md bg-surface ring-1 ring-border ring-inset select-none",
+          "relative h-11 touch-none rounded-md bg-surface ring-1 ring-border select-none ring-inset",
           grabbing ? "cursor-grabbing" : "cursor-crosshair",
         )}
         onPointerDown={onPointerDown}
@@ -402,7 +405,13 @@ export function Brush({
                 animate={{ x: handle.at }}
                 transition={draft ? instant : glide}
               >
-                <rect x={-4} y={0} width={16} height={HEIGHT} fill="transparent" />
+                <rect
+                  x={-4}
+                  y={0}
+                  width={16}
+                  height={HEIGHT}
+                  fill="transparent"
+                />
                 <rect
                   y={12}
                   width={8}

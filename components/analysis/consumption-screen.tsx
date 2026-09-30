@@ -7,11 +7,7 @@ import { useDataSummary } from "@/components/app-shell/use-data-summary";
 import { formatDay } from "@/components/export/fake-export";
 import { localParts } from "./chart-axes";
 import { Brush } from "./brush";
-import {
-  ConsumptionChart,
-  SERIES,
-  type SeriesKey,
-} from "./consumption-chart";
+import { ConsumptionChart, SERIES, type SeriesKey } from "./consumption-chart";
 import {
   Breadcrumb,
   drillProps,

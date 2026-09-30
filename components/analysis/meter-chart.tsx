@@ -349,9 +349,7 @@ function gapHover(
           tone="danger"
         />
         <TooltipRow label="Linie" value="gerade verbunden" tone="muted" />
-        {next && (
-          <TooltipRow label="Nächste ESL" value={formatDay(next.day)} />
-        )}
+        {next && <TooltipRow label="Nächste ESL" value={formatDay(next.day)} />}
       </>
     ),
   };

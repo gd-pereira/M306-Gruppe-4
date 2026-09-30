@@ -11,7 +11,7 @@ Built by M306 Gruppe 4 during the BZZ project week (28.09. to 02.10.2026).
 
 ## Status
 
-As of 29.09.2026 the complete data pipeline in `lib/` is implemented and tested, including a web worker for importing thousands of files. The data store in `lib/data-store.ts` is ready for the pages. The import page and the real charts are not built yet.
+As of 30.09.2026 the complete data pipeline in `lib/` is implemented and tested, including a web worker for importing thousands of files. All pages are built, but they still show demo data from the `fake-*.ts` files in `components/`. The next step is to connect them to the data store in `lib/data-store.ts`.
 
 | Feature                                        | Status                                       |
 | ---------------------------------------------- | -------------------------------------------- |
@@ -24,13 +24,14 @@ As of 29.09.2026 the complete data pipeline in `lib/` is implemented and tested,
 | Aggregate to zoom levels (15 min to month)     | Done, `lib/aggregate.ts`                     |
 | Import many files in a web worker              | Done, `lib/import.ts`, `lib/start-import.ts` |
 | Data store for the pages                       | Done, `lib/data-store.ts`                    |
-| Start page with branding                       | Done, `/`                                    |
-| Import page (file picker, progress, errors)    | Open                                         |
-| Consumption chart                              | Prototype with fake data at `/prototype`     |
-| Meter reading chart                            | Open                                         |
-| CSV export                                     | Open                                         |
-| Save as JSON file (nice to have)               | Open                                         |
-| HTTP POST of JSON to a server (nice to have)   | Open                                         |
+| Login with password                            | Demo only, see [Login](#login)               |
+| Dashboard                                      | Built, demo data                             |
+| Import page (file picker, progress, errors)    | Built, demo data                             |
+| Consumption chart                              | Built, demo data                             |
+| Meter reading chart                            | Built, demo data                             |
+| CSV export                                     | Page built, export logic open                |
+| Save as JSON file (nice to have)               | Page built, export logic open                |
+| HTTP POST of JSON to a server (nice to have)   | Page built, export logic open                |
 
 ## Tech stack
 
@@ -57,7 +58,11 @@ npm install
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000). The chart prototype is at [http://localhost:3000/prototype](http://localhost:3000/prototype).
+Then open [http://localhost:3000](http://localhost:3000) and log in with the demo password `flux`. Sample files to import are in `data/sdat/` and `data/esl/`.
+
+### Login
+
+`proxy.ts` sends every visitor without the session cookie `flux-session` to `/login`. For now the password is checked in the browser against the demo password in `components/login/fake-auth.ts`, and `lib/session.ts` sets the cookie. There is no environment variable yet. The planned version checks the password on the server against an environment variable and sets an httpOnly cookie, so the real password never ends up in the browser.
 
 ### Scripts
 
@@ -74,16 +79,23 @@ Then open [http://localhost:3000](http://localhost:3000). The chart prototype is
 ## Project structure
 
 ```
+proxy.ts                 redirects to /login without a session
 app/
-  page.tsx               start page
-  prototype/page.tsx     chart prototype with fake data
+  page.tsx               redirects to /dashboard
+  login/                 login page
+  (app)/                 pages with sidebar: dashboard, verbrauch, zaehlerstand, import, export
+  not-found.tsx          404 page
   icon.svg, apple-icon.tsx, opengraph-image.tsx   app icons and share image
 components/
+  app-shell/             sidebar, command palette, keyboard shortcuts
+  dashboard/, analysis/, import/, export/, login/   screens of the pages
   brand/flux-logo.tsx    FluxLogo and FluxMark components
   charts/                bklit chart components (line chart, axes, tooltip, ...)
-  prototype/fake-data.ts generated demo data for the prototype
   ui/                    shadcn components
 lib/
+  session.ts             session cookie (demo, see Login)
+  format.ts              number and date formatting for the UI
+  utils.ts               cn() for Tailwind classes
   types.ts               shared types and the sensor IDs
   xml.ts                 XML parsing and validation
   detect.ts              tells SDAT and ESL files apart

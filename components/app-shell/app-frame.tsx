@@ -69,9 +69,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
         className="relative flex min-w-0 flex-1 flex-col gap-5 px-10 py-8"
       >
         <AnimatePresence initial={false} mode="popLayout">
-          {showBar && (
-            <FullscreenBar key="bar" play={play} pending={pending} />
-          )}
+          {showBar && <FullscreenBar key="bar" play={play} pending={pending} />}
         </AnimatePresence>
         {!redirecting && children}
       </main>

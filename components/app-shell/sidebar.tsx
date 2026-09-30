@@ -145,7 +145,7 @@ function OpenSidebar({
       {/* scrolls on short windows, the negative margin keeps the focus rings visible */}
       <nav
         aria-label="Hauptnavigation"
-        className="mt-[22px] -mx-1 flex min-h-0 [scrollbar-width:none] flex-col gap-3 overflow-y-auto px-1 py-0.5"
+        className="-mx-1 mt-[22px] flex min-h-0 [scrollbar-width:none] flex-col gap-3 overflow-y-auto px-1 py-0.5"
       >
         {NAV_GROUPS.map((group, index) => (
           <Fragment key={group.label}>
