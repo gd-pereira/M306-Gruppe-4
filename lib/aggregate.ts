@@ -77,7 +77,7 @@ export function bucketAt(ts: number, level: ZoomLevel): Bucket {
 // combines the points per bucket of the zoom level, ts of the result is the start of the bucket
 // usage: sum of all values in the bucket
 // meterReading: the last reading in the bucket. a reading belongs to the end of its interval
-// (see computeMeterReadings), so a reading at exactly 00:00 is the end of the day before
+// (see fitMeterReadings), so a reading at exactly 00:00 is the end of the day before
 // points must be sorted by ts
 export function aggregate(
   points: DataPoint[],
