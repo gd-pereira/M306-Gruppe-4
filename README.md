@@ -343,4 +343,4 @@ In code, use `FluxLogo` or `FluxMark` from `components/brand/flux-logo.tsx`. Arr
 
 - `docs/Projektbeschreibung.pdf`: project description from the client
 - `docs/Bewertungskriterien.pdf`: grading criteria
-- `docs/sdat-spec/`: SDAT standard (Swiss standardised data exchange) with appendices and example files
+- `docs/sdat-spec/`: SDAT standard (Swiss standardised data exchange) with appendices and example files.
