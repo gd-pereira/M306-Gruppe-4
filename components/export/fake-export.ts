@@ -1,8 +1,28 @@
+import {
+  buildFile as buildExportFile,
+  csvLines,
+  exportSummary,
+  fileName as exportFileName,
+  jsonValue,
+  readingsInRange,
+  type ExportFormat,
+  type ExportRequest,
+  type ExportSeries,
+} from "@/lib/export";
 import { formatNumber } from "@/lib/format";
 import { zurichToUnix } from "@/lib/time";
-import { SENSOR_IDS, type Direction, type SensorId } from "@/lib/types";
+import type { Gap } from "@/lib/timeseries";
+import {
+  SENSOR_IDS,
+  type DataPoint,
+  type Direction,
+  type SensorId,
+} from "@/lib/types";
 
-// stand-in for export.ts (T4-1): same numbers as the figma frames, the real meter readings replace it later
+// the export screen's helpers: days and ranges for the ui, the file itself comes from lib/export.ts
+// the values come in as an ExportSource: the real meter readings after an import (export-source.ts),
+// before that and for the demo data the made-up curve below with the same numbers as the figma frames
+// no store or react imports here, server components use the day helpers too
 
 // "YYYY-MM-DD", a day in swiss local time
 export type DayKey = string;
@@ -10,7 +30,7 @@ export interface DayRange {
   from: DayKey;
   to: DayKey;
 }
-export type ExportFormat = "csv" | "json";
+export type { ExportFormat };
 
 export const DATA_START: DayKey = "2018-01-01";
 export const DATA_END: DayKey = "2021-09-06";
@@ -75,6 +95,19 @@ export function daysBetween(from: DayKey, to: DayKey): number {
 // unix seconds of 00:00 swiss time on that day
 export function dayStart(day: DayKey): number {
   return zurichToUnix(`${day}T00:00:00`);
+}
+
+// "en-CA" writes dates as YYYY-MM-DD
+const zurichDay = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Zurich",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+// the swiss day of a moment, e.g. 1581202800 -> "2020-02-09"
+export function dayOf(ts: number): DayKey {
+  return zurichDay.format(new Date(ts * 1000));
 }
 
 export function formatDay(day: DayKey): string {
@@ -216,12 +249,33 @@ export function getReadings(sensor: SensorId): Float64Array {
   return cumulative;
 }
 
-function indexRange(range: DayRange): [number, number] {
-  const { start, count } = getGrid();
-  const a = (dayStart(range.from) - start) / INTERVAL;
-  const b = (dayStart(addDays(range.to, 1)) - start) / INTERVAL;
-  return [Math.max(0, Math.min(count, a)), Math.max(0, Math.min(count, b))];
+// the made-up readings in the same shape as the real ones, one per 15 min, nothing in the gaps
+let fakeSource: ExportSource | null = null;
+
+export function fakeExportSource(): ExportSource {
+  if (fakeSource) return fakeSource;
+  const { start, count, gap } = getGrid();
+  const gaps: Gap[] = GAPS.map((range) => ({
+    start: dayStart(range.from),
+    end: dayStart(addDays(range.to, 1)),
+  }));
+  const source = {} as ExportSource;
+  for (const { id } of SENSORS) {
+    const values = getReadings(id);
+    const readings: DataPoint[] = [];
+    for (let i = 0; i < count; i++) {
+      // a reading belongs to the end of its interval
+      if (!gap[i])
+        readings.push({ ts: start + (i + 1) * INTERVAL, value: values[i] });
+    }
+    source[id] = { sensorId: id, readings, gaps };
+  }
+  fakeSource = source;
+  return source;
 }
+
+// the meter readings of both sensors that the export uses
+export type ExportSource = Record<SensorId, ExportSeries>;
 
 export interface ExportSelection {
   format: ExportFormat;
@@ -235,21 +289,25 @@ function selectedSensors(selection: ExportSelection): SensorId[] {
     : SENSORS.map((sensor) => sensor.id);
 }
 
+// from 00:00 on the first day to 00:00 after the last day, in unix seconds
+function rangeBounds(range: DayRange): { from: number; to: number } {
+  return { from: dayStart(range.from), to: dayStart(addDays(range.to, 1)) };
+}
+
+function exportRequest(
+  selection: ExportSelection,
+  source: ExportSource,
+): ExportRequest {
+  return {
+    format: selection.format,
+    series: selectedSensors(selection).map((sensor) => source[sensor]),
+    ...rangeBounds(selection.range),
+  };
+}
+
 export function fileName(selection: ExportSelection): string {
-  return selection.format === "csv"
-    ? `${selection.sensor}.csv`
-    : "zaehlerstaende.json";
+  return exportFileName(selection.format, selection.sensor);
 }
-
-export function mimeType(format: ExportFormat): string {
-  return format === "csv" ? "text/csv;charset=utf-8" : "application/json";
-}
-
-const value = (reading: number) => reading.toFixed(1);
-const csvLine = (ts: number, reading: number) => `${ts},${value(reading)}`;
-const jsonValue = (ts: number, reading: number) =>
-  `{"ts":"${ts}","value":${value(reading)}}`;
-const jsonHead = (sensor: SensorId) => `{"sensorId":"${sensor}","data":[`;
 
 export interface ExportStats {
   fileName: string;
@@ -262,58 +320,22 @@ export interface ExportStats {
   gaps: DayRange[];
 }
 
-export function exportStats(selection: ExportSelection): ExportStats {
-  const { start, gap } = getGrid();
-  const [a, b] = indexRange(selection.range);
-  const sensors = selectedSensors(selection);
-  const readings: ExportStats["readings"] = {};
-  let values = 0;
-  let bytes =
-    selection.format === "csv" ? "timestamp,value\n".length : "[]\n".length;
-
-  sensors.forEach((sensor, index) => {
-    const series = getReadings(sensor);
-    let first: number | null = null;
-    let last: number | null = null;
-    let count = 0;
-    for (let i = a; i < b; i++) {
-      if (gap[i]) continue;
-      const reading = series[i];
-      first ??= reading;
-      last = reading;
-      count++;
-      const ts = start + (i + 1) * INTERVAL;
-      // csv: line plus newline, json: value plus separating comma (one too many, taken off below)
-      bytes +=
-        (selection.format === "csv"
-          ? csvLine(ts, reading).length
-          : jsonValue(ts, reading).length) + 1;
-    }
-    values += count;
-    readings[sensor] = first === null || last === null ? null : { first, last };
-    if (selection.format === "json") {
-      bytes +=
-        (index > 0 ? 1 : 0) +
-        jsonHead(sensor).length +
-        "]}".length -
-        (count > 0 ? 1 : 0);
-    }
-  });
-
-  const gaps = GAPS.filter(
-    (g) => g.to >= selection.range.from && g.from <= selection.range.to,
-  ).map((g) => ({
-    from: g.from < selection.range.from ? selection.range.from : g.from,
-    to: g.to > selection.range.to ? selection.range.to : g.to,
-  }));
-
+export function exportStats(
+  selection: ExportSelection,
+  source: ExportSource = fakeExportSource(),
+): ExportStats {
+  const summary = exportSummary(exportRequest(selection, source));
   return {
     fileName: fileName(selection),
-    sensors,
-    values,
-    bytes,
-    readings,
-    gaps,
+    sensors: selectedSensors(selection),
+    values: summary.values,
+    bytes: summary.bytes,
+    readings: summary.readings,
+    // a gap ends at 00:00 of the next day, so its last day is one second earlier
+    gaps: summary.gaps.map((gap) => ({
+      from: dayOf(gap.start),
+      to: dayOf(gap.end - 1),
+    })),
   };
 }
 
@@ -323,53 +345,12 @@ export function formatBytes(bytes: number): string {
   return `${formatNumber(bytes / 1_000_000, 1)} MB`;
 }
 
-function* csvLines(selection: ExportSelection): Generator<string> {
-  const { start, gap } = getGrid();
-  const [a, b] = indexRange(selection.range);
-  yield "timestamp,value";
-  const series = getReadings(selection.sensor);
-  for (let i = a; i < b; i++) {
-    if (!gap[i]) yield csvLine(start + (i + 1) * INTERVAL, series[i]);
-  }
-}
-
-// csv line by line, json minified in one line
-function* filePieces(selection: ExportSelection): Generator<string> {
-  if (selection.format === "csv") {
-    for (const line of csvLines(selection)) yield `${line}\n`;
-    return;
-  }
-  const { start, gap } = getGrid();
-  const [a, b] = indexRange(selection.range);
-  yield "[";
-  for (const [index, sensor] of selectedSensors(selection).entries()) {
-    const series = getReadings(sensor);
-    yield `${index > 0 ? "," : ""}${jsonHead(sensor)}`;
-    let first = true;
-    for (let i = a; i < b; i++) {
-      if (gap[i]) continue;
-      yield `${first ? "" : ","}${jsonValue(start + (i + 1) * INTERVAL, series[i])}`;
-      first = false;
-    }
-    yield "]}";
-  }
-  yield "]\n";
-}
-
-// the whole file in chunks, yielding to the browser in between so the page stays responsive
-export async function buildFile(selection: ExportSelection): Promise<Blob> {
-  const parts: string[] = [];
-  let chunk: string[] = [];
-  for (const piece of filePieces(selection)) {
-    chunk.push(piece);
-    if (chunk.length === 20_000) {
-      parts.push(chunk.join(""));
-      chunk = [];
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  if (chunk.length > 0) parts.push(chunk.join(""));
-  return new Blob(parts, { type: mimeType(selection.format) });
+// the whole file, built in chunks so the page stays responsive
+export async function buildFile(
+  selection: ExportSelection,
+  source: ExportSource = fakeExportSource(),
+): Promise<Blob> {
+  return buildExportFile(exportRequest(selection, source));
 }
 
 export interface Preview {
@@ -383,53 +364,44 @@ export function preview(
   selection: ExportSelection,
   stats: ExportStats,
   rows: number,
+  source: ExportSource = fakeExportSource(),
 ): Preview {
+  const request = exportRequest(selection, source);
   if (selection.format === "csv") {
     const lines: string[] = [];
-    for (const line of csvLines(selection)) {
+    for (const line of csvLines(request)) {
       if (lines.length === rows) break;
       lines.push(line);
     }
     return {
       lines,
-      remaining: stats.values + 1 - lines.length,
+      // plus the two lines "sep=," and the header
+      remaining: stats.values + 2 - lines.length,
       unit: "Zeilen",
     };
   }
 
   // pretty-printed for reading: a few values per sensor with "…" in between, cut off where the card ends
   const perSensor = Math.max(2, Math.floor((rows - 11) / 2));
-  const { start, gap } = getGrid();
-  const [a, b] = indexRange(selection.range);
   const all: { text: string; isValue: boolean }[] = [
     { text: "[", isValue: false },
   ];
-  stats.sensors.forEach((sensor, index) => {
-    const series = getReadings(sensor);
+  request.series.forEach((series, index) => {
     all.push(
       { text: "  {", isValue: false },
-      { text: `    "sensorId": "${sensor}",`, isValue: false },
+      { text: `    "sensorId": "${series.sensorId}",`, isValue: false },
       { text: `    "data": [`, isValue: false },
     );
-    let shown = 0;
-    let more = false;
-    for (let i = a; i < b; i++) {
-      if (gap[i]) continue;
-      if (shown === perSensor) {
-        more = true;
-        break;
-      }
-      all.push({
-        text: `      ${jsonValue(start + (i + 1) * INTERVAL, series[i])},`,
-        isValue: true,
-      });
-      shown++;
+    const points = readingsInRange(series.readings, request.from, request.to);
+    for (const point of points.slice(0, perSensor)) {
+      all.push({ text: `      ${jsonValue(point)},`, isValue: true });
     }
-    if (more) all.push({ text: "        …", isValue: false });
+    if (points.length > perSensor)
+      all.push({ text: "        …", isValue: false });
     all.push(
       { text: "    ]", isValue: false },
       {
-        text: index < stats.sensors.length - 1 ? "  }," : "  }",
+        text: index < request.series.length - 1 ? "  }," : "  }",
         isValue: false,
       },
     );
@@ -454,19 +426,22 @@ export interface ChartSeries {
 export function chartSeries(
   selection: ExportSelection,
   samples = 240,
+  source: ExportSource = fakeExportSource(),
 ): ChartSeries[] {
-  const [a, b] = indexRange(selection.range);
-  const span = b - a;
-  return selectedSensors(selection).map((sensor) => {
-    const series = getReadings(sensor);
-    const points: ChartSeries["points"] = [];
-    if (span <= 0) return { sensor, points };
-    const n = Math.min(samples, span);
+  const request = exportRequest(selection, source);
+  return request.series.map((series) => {
+    const points = readingsInRange(series.readings, request.from, request.to);
+    const n = Math.min(samples, points.length);
+    const sampled: ChartSeries["points"] = [];
     for (let j = 0; j < n; j++) {
-      const offset = n === 1 ? 0 : Math.round((j * (span - 1)) / (n - 1));
-      points.push({ x: (offset + 1) / span, y: series[a + offset] });
+      const point =
+        points[n === 1 ? 0 : Math.round((j * (points.length - 1)) / (n - 1))];
+      sampled.push({
+        x: rangeFraction(selection.range, point.ts),
+        y: point.value,
+      });
     }
-    return { sensor, points };
+    return { sensor: series.sensorId, points: sampled };
   });
 }
 

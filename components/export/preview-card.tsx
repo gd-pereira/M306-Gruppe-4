@@ -7,6 +7,7 @@ import { toast } from "@/components/ui/toaster";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { requestHead, type RequestTarget } from "./api-request";
+import { useExportSource } from "./export-source";
 import { preview, type ExportSelection, type ExportStats } from "./fake-export";
 import { useElementSize } from "./hooks";
 
@@ -31,15 +32,16 @@ export function PreviewCard({
   const rows = Math.max(0, Math.floor((height - PADDING + 4) / ROW) - 1);
   const host = request?.host;
   const path = request?.path;
+  const source = useExportSource();
   const content = useMemo(() => {
     const head =
       host !== undefined && path !== undefined
         ? requestHead({ host, path })
         : [];
     if (!valid || rows <= head.length) return null;
-    const body = preview(selection, stats, rows - head.length);
+    const body = preview(selection, stats, rows - head.length, source);
     return { ...body, lines: [...head, ...body.lines], head: head.length };
-  }, [valid, rows, selection, stats, host, path]);
+  }, [valid, rows, selection, stats, host, path, source]);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {

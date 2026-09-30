@@ -30,7 +30,8 @@ describe("exportStats", () => {
     expect(stats.values).toBe(128_060);
     expect(stats.readings.ID742?.first.toFixed(1)).toBe("3570.0");
     expect(stats.readings.ID742?.last.toFixed(1)).toBe("54435.3");
-    expect(formatBytes(stats.bytes)).toBe("2.4 MB");
+    // values with up to 4 decimals (lib/export.ts), the figma frame still shows 2.4 MB with one decimal
+    expect(formatBytes(stats.bytes)).toBe("2.8 MB");
     expect(stats.gaps.map(formatDayRange)).toEqual([
       "09.02.2020",
       "14.–15.06.2020",
@@ -43,7 +44,7 @@ describe("exportStats", () => {
     const stats = exportStats(json);
     expect(stats.fileName).toBe("zaehlerstaende.json");
     expect(stats.values).toBe(256_120);
-    expect(formatBytes(stats.bytes)).toBe("9.2 MB");
+    expect(formatBytes(stats.bytes)).toBe("9.9 MB");
     expect(stats.readings.ID735?.last.toFixed(1)).toBe("23367.0");
   });
 
@@ -66,9 +67,9 @@ describe("file content", () => {
   it("writes csv with a header and unix seconds at the end of the interval", async () => {
     const text = await (await buildFile({ ...csv, range: short })).text();
     const lines = text.trimEnd().split("\n");
-    expect(lines[0]).toBe("timestamp,value");
+    expect(lines.slice(0, 2)).toEqual(["sep=,", "timestamp,value"]);
     // 3 days minus the gap day, 96 values each
-    expect(lines).toHaveLength(1 + 2 * 96);
+    expect(lines).toHaveLength(2 + 2 * 96);
     expect(text.length).toBe(exportStats({ ...csv, range: short }).bytes);
   });
 
@@ -88,9 +89,11 @@ describe("file content", () => {
   it("starts the id742 export like the mockup", () => {
     const stats = exportStats(csv);
     const { lines, remaining } = preview(csv, stats, 26);
-    expect(lines[0]).toBe("timestamp,value");
-    expect(lines[1]).toBe("1514762100,3570.0");
-    expect(remaining).toBe(128_035);
+    expect(lines.slice(0, 2)).toEqual(["sep=,", "timestamp,value"]);
+    // the demo curve starts at exactly 3570, trailing zeros are left out
+    expect(lines[2]).toBe("1514762100,3570");
+    // 128'060 values plus the two lines above, 26 of them are shown
+    expect(remaining).toBe(128_036);
   });
 
   it("shows seven values per sensor in a json preview of 25 rows", () => {

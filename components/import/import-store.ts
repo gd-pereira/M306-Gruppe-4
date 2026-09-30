@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { importFiles } from "@/lib/data-store";
 import {
   buildFakeResult,
   isXml,
@@ -72,6 +73,15 @@ export function startImport(files: FileInfo[]): void {
   if (xml.length === 0) {
     setState({ status: "failed", failure: NO_XML_FAILURE, progress: null });
     return;
+  }
+
+  // real files also go through the real import (lib/data-store), the export already reads from there
+  // the demo only has made-up file names, so it stays fake
+  const real = xml.filter(
+    (file): file is File => typeof File !== "undefined" && file instanceof File,
+  );
+  if (real.length === xml.length) {
+    void importFiles(real);
   }
 
   const total = xml.length;

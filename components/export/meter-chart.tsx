@@ -13,12 +13,12 @@ import {
   chartSeries,
   DATA_START,
   dayStart,
-  GAPS,
   rangeFraction,
   sensorInfo,
   yTicks,
   type ExportSelection,
 } from "./fake-export";
+import { useExportSource } from "./export-source";
 import { useElementSize } from "./hooks";
 
 const TOP_PAD = 6;
@@ -40,7 +40,11 @@ export function MeterChart({
 }) {
   const [plotRef, { width, height }] = useElementSize<HTMLDivElement>();
   const { range } = selection;
-  const series = useMemo(() => chartSeries(selection), [selection]);
+  const source = useExportSource();
+  const series = useMemo(
+    () => chartSeries(selection, undefined, source),
+    [selection, source],
+  );
   const axis = useMemo(() => axisLabels(range), [range]);
 
   const values = series.flatMap((s) => s.points.map((p) => p.y));
@@ -56,13 +60,16 @@ export function MeterChart({
     from: rangeFraction(range, dayStart(DATA_START)),
     to: rangeFraction(range, dayStart(addDays(BACKCALC_END, 1))),
   };
+  // both sensors have the same gaps
   const gaps = useMemo(
     () =>
-      GAPS.map((gap) => ({
-        from: rangeFraction(range, dayStart(gap.from)),
-        to: rangeFraction(range, dayStart(addDays(gap.to, 1))),
-      })).filter((gap) => gap.to > gap.from),
-    [range],
+      source[selection.sensor].gaps
+        .map((gap) => ({
+          from: rangeFraction(range, gap.start),
+          to: rangeFraction(range, gap.end),
+        }))
+        .filter((gap) => gap.to > gap.from),
+    [range, source, selection.sensor],
   );
   const drawKey = `${selection.format}-${selection.sensor}-${range.from}-${range.to}`;
 

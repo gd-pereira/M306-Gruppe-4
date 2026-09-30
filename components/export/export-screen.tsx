@@ -23,6 +23,7 @@ import {
   type ExportFormat,
   type ExportSelection,
 } from "./fake-export";
+import { useExportSource } from "./export-source";
 import { ModeTiles, RangePresets } from "./form-parts";
 import { PreviewCard } from "./preview-card";
 import { selectionParams, type ExportMode } from "./selection";
@@ -80,7 +81,12 @@ export function ExportScreen({
     () => ({ format, sensor, range: valid ? range : ALL }),
     [format, sensor, range, valid],
   );
-  const stats = useMemo(() => exportStats(selection), [selection]);
+  // real meter readings after an import, the demo curve before
+  const source = useExportSource();
+  const stats = useMemo(
+    () => exportStats(selection, source),
+    [selection, source],
+  );
 
   const server = parseServerUrl(url);
   const target = requestTarget(url);
@@ -108,9 +114,9 @@ export function ExportScreen({
   async function download() {
     if (!valid || downloading) return;
     setDownloading(true);
-    const current = { selection, stats };
+    const current = { selection, stats, source };
     try {
-      const blob = await buildFile(current.selection);
+      const blob = await buildFile(current.selection, current.source);
       const href = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = href;
@@ -148,7 +154,7 @@ export function ExportScreen({
     };
     setApiState({ kind: "sending", host: server.host });
     try {
-      const result = await sendExport(server, range, controller.signal);
+      const result = await sendExport(server, range, controller.signal, source);
       setApiState({ kind: "done", result, ...sent });
     } catch {
       // cancelled because the page was left
