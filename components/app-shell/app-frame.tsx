@@ -8,24 +8,33 @@ import { useEffect, useState, type ReactNode } from "react";
 import { FluxLogo } from "@/components/brand/flux-logo";
 import { EASE_OUT } from "@/components/motion-provider";
 import { buttonVariants } from "@/components/ui/button";
-import { markOnboarded, useOnboarded } from "./onboarding";
+import { clearOnboarded, markOnboarded, useOnboarded } from "./onboarding";
 import { Sidebar } from "./sidebar";
 import { useDataSummary } from "./use-data-summary";
+import { useImportStore } from "@/components/import/import-store";
 
-// before the first import the import is the only useful page: it runs fullscreen and the
-// sidebar slides in once it is done, afterwards the app always has its sidebar
+// when there are no data imported, the app runs in fullscreen on /import without a sidebar;
+// once data is imported, the sidebar slides in
 export function AppFrame({ children }: { children: ReactNode }) {
+  const { restoring } = useImportStore();
   const hasData = useDataSummary() !== null;
   const onboarded = useOnboarded();
-  // until hydration both sidebar and bar are rendered, css picks one via the boot script flag
-  const pending = onboarded === null && !hasData;
-  const showSidebar = hasData || onboarded !== false;
-  const showBar = !hasData && onboarded !== true;
+
+  // until hydration/restore finishes, css picks via boot script flag:
+  const pending = (onboarded === null || restoring) && !hasData;
+
+  // sidebar is only visible when there are data (or temporarily during initial restore if onboarded)
+  const showSidebar = hasData || (restoring && onboarded === true);
+  const showBar = !hasData;
+
   const pathname = usePathname();
   const router = useRouter();
   const reduceMotion = useReducedMotion();
-  const redirecting = !hasData && onboarded === false && pathname !== "/import";
+
+  // always redirect to /import whenever there are no data
+  const redirecting = !restoring && !hasData && pathname !== "/import";
   const guarded = pending && pathname !== "/import";
+
   // switching from the pending state after hydration must not animate
   const [ready, setReady] = useState(false);
   const play = ready && !reduceMotion;
@@ -36,8 +45,12 @@ export function AppFrame({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (hasData && onboarded === false) markOnboarded();
-  }, [hasData, onboarded]);
+    if (hasData && onboarded === false) {
+      markOnboarded();
+    } else if (!restoring && !hasData && onboarded === true) {
+      clearOnboarded();
+    }
+  }, [hasData, onboarded, restoring]);
 
   useEffect(() => {
     if (redirecting) router.replace("/import");
@@ -89,8 +102,8 @@ function FullscreenBar({ play, pending }: { play: boolean; pending: boolean }) {
       className="flex items-center justify-between pb-3"
     >
       <Link
-        href="/dashboard"
-        aria-label="Zum Dashboard"
+        href="/import"
+        aria-label="Zum Import"
         className="rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <FluxLogo className="h-7 w-auto text-foreground" />
