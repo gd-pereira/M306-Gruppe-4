@@ -16,7 +16,7 @@ import {
   formatDayRange,
   type ExportSelection,
   type ExportStats,
-} from "./fake-export";
+} from "./export-data";
 import { AnimatedNumber } from "./hooks";
 import { MeterChart } from "./meter-chart";
 import { meterHref } from "./selection";

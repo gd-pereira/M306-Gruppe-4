@@ -4,7 +4,7 @@ import {
   formatDayRange,
   type DayKey,
   type DayRange,
-} from "@/components/export/fake-export";
+} from "@/components/export/export-data";
 import { zurichToUnix } from "@/lib/time";
 import {
   formatWeekday,

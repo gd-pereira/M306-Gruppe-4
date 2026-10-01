@@ -2,17 +2,28 @@ import { useMemo } from "react";
 import { getDataState, useDataStore } from "@/lib/data-store";
 import { exportSeries } from "@/lib/export";
 import type { ImportResult } from "@/lib/import";
-import { fakeExportSource, type ExportSource } from "./fake-export";
+import { SENSOR_IDS, type SensorId } from "@/lib/types";
+import type { ExportSource } from "./export-data";
 
-// where the export takes its meter readings from: the real import as soon as there is one,
-// the made-up curve (demo) before that. uses the store, so only for client components
+// where the export takes its meter readings from: the imported data, empty series before
+// the first import. uses the store, so only for client components
 
 let real: { result: ImportResult; source: ExportSource } | null = null;
+
+const emptySeries = (sensorId: SensorId) => ({
+  sensorId,
+  readings: [],
+  gaps: [],
+});
+const EMPTY_SOURCE: ExportSource = {
+  [SENSOR_IDS.consumption]: emptySeries(SENSOR_IDS.consumption),
+  [SENSOR_IDS.feedIn]: emptySeries(SENSOR_IDS.feedIn),
+};
 
 export function exportSource(
   result: ImportResult | null = getDataState().result,
 ): ExportSource {
-  if (!result) return fakeExportSource();
+  if (!result) return EMPTY_SOURCE;
   if (real?.result !== result) {
     real = { result, source: exportSeries(result) };
   }

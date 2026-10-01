@@ -5,12 +5,18 @@ import { motion } from "motion/react";
 import { useId } from "react";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { FileStatus } from "./fake-import";
+import type { FileStatus } from "./import-view";
 
 const STATUS = {
   imported: {
     label: "Eingelesen",
     className: "bg-success-soft text-success-strong",
+    dot: "bg-success",
+  },
+  // every value of the file is already in a newer file
+  duplicate: {
+    label: "Doppelt",
+    className: "bg-muted text-soft-foreground",
     dot: "bg-success",
   },
   ignored: {

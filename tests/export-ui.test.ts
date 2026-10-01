@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fakeExportSource } from "./fake-data";
 import {
   axisLabels,
   buildFile,
@@ -12,7 +13,7 @@ import {
   PRESETS,
   yTicks,
   type ExportSelection,
-} from "@/components/export/fake-export";
+} from "@/components/export/export-data";
 import {
   meterHref,
   selectionFromParams,
@@ -25,7 +26,7 @@ const json: ExportSelection = { format: "json", sensor: "ID742", range: all };
 
 describe("exportStats", () => {
   it("matches the numbers of the figma frames", () => {
-    const stats = exportStats(csv);
+    const stats = exportStats(csv, fakeExportSource());
     expect(stats.fileName).toBe("ID742.csv");
     expect(stats.values).toBe(128_060);
     expect(stats.readings.ID742?.first.toFixed(1)).toBe("3570.0");
@@ -41,7 +42,7 @@ describe("exportStats", () => {
   });
 
   it("counts both sensors for json", () => {
-    const stats = exportStats(json);
+    const stats = exportStats(json, fakeExportSource());
     expect(stats.fileName).toBe("zaehlerstaende.json");
     expect(stats.values).toBe(256_120);
     expect(formatBytes(stats.bytes)).toBe("9.9 MB");
@@ -49,10 +50,13 @@ describe("exportStats", () => {
   });
 
   it("only keeps the gaps inside the range", () => {
-    const stats = exportStats({
-      ...csv,
-      range: { from: "2021-02-20", to: "2021-03-31" },
-    });
+    const stats = exportStats(
+      {
+        ...csv,
+        range: { from: "2021-02-20", to: "2021-03-31" },
+      },
+      fakeExportSource(),
+    );
     expect(stats.gaps.map(formatDayRange)).toEqual([
       "20.–24.02.2021",
       "27.03.2021",
@@ -65,17 +69,21 @@ describe("file content", () => {
   const short = { from: "2020-02-08", to: "2020-02-10" };
 
   it("writes csv with a header and unix seconds at the end of the interval", async () => {
-    const text = await (await buildFile({ ...csv, range: short })).text();
+    const text = await (
+      await buildFile({ ...csv, range: short }, fakeExportSource())
+    ).text();
     const lines = text.trimEnd().split("\n");
     expect(lines.slice(0, 2)).toEqual(["sep=,", "timestamp,value"]);
     // 3 days minus the gap day, 96 values each
     expect(lines).toHaveLength(2 + 2 * 96);
-    expect(text.length).toBe(exportStats({ ...csv, range: short }).bytes);
+    expect(text.length).toBe(
+      exportStats({ ...csv, range: short }, fakeExportSource()).bytes,
+    );
   });
 
   it("writes valid json with ts as string and the size matches", async () => {
     const selection = { ...json, range: short };
-    const text = await (await buildFile(selection)).text();
+    const text = await (await buildFile(selection, fakeExportSource())).text();
     const parsed = JSON.parse(text) as {
       sensorId: string;
       data: { ts: string; value: number }[];
@@ -83,12 +91,12 @@ describe("file content", () => {
     expect(parsed.map((entry) => entry.sensorId)).toEqual(["ID742", "ID735"]);
     expect(typeof parsed[0].data[0].ts).toBe("string");
     expect(parsed[0].data).toHaveLength(2 * 96);
-    expect(text.length).toBe(exportStats(selection).bytes);
+    expect(text.length).toBe(exportStats(selection, fakeExportSource()).bytes);
   });
 
   it("starts the id742 export like the mockup", () => {
-    const stats = exportStats(csv);
-    const { lines, remaining } = preview(csv, stats, 26);
+    const stats = exportStats(csv, fakeExportSource());
+    const { lines, remaining } = preview(csv, stats, 26, fakeExportSource());
     expect(lines.slice(0, 2)).toEqual(["sep=,", "timestamp,value"]);
     // the demo curve starts at exactly 3570, trailing zeros are left out
     expect(lines[2]).toBe("1514762100,3570");
@@ -97,7 +105,12 @@ describe("file content", () => {
   });
 
   it("shows seven values per sensor in a json preview of 25 rows", () => {
-    const { remaining, unit } = preview(json, exportStats(json), 25);
+    const { remaining, unit } = preview(
+      json,
+      exportStats(json, fakeExportSource()),
+      25,
+      fakeExportSource(),
+    );
     expect(unit).toBe("Werte");
     expect(remaining).toBe(256_106);
   });

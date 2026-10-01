@@ -6,7 +6,7 @@ import {
   SENSORS,
   type DayKey,
   type ExportSelection,
-} from "./fake-export";
+} from "./export-data";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 

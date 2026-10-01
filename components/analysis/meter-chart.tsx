@@ -6,10 +6,9 @@ import { useMemo } from "react";
 import {
   daysBetween,
   formatDay,
-  GAPS,
   yTicks,
   type DayRange,
-} from "@/components/export/fake-export";
+} from "@/components/export/export-data";
 import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
 import { localParts, shortRange, xTicksFor } from "./chart-axes";
@@ -29,7 +28,7 @@ import {
   sdatEndReading,
   type EslReading,
   type MeterPoint,
-} from "./fake-analysis";
+} from "./analysis-data";
 import { formatWeekday, pagerLabel, resolutionOf, type Period } from "./period";
 import {
   DrawnPath,
@@ -73,10 +72,10 @@ function interpolate(points: MeterPoint[], ts: number): number | null {
 
 const kwh = (value: number) => `${formatNumber(value, 1)} kWh`;
 
-function sourceOf(ts: number): string {
+function sourceOf(ts: number, gaps: DayRange[]): string {
   const { day } = localParts(ts - 1);
   if (day < FIRST_ESL) return "Zurückgerechnet";
-  if (GAPS.some((gap) => day >= gap.from && day <= gap.to)) {
+  if (gaps.some((gap) => day >= gap.from && day <= gap.to)) {
     return "Lücke, gerade verbunden";
   }
   return "SDAT-Verlauf";
@@ -258,7 +257,11 @@ export function MeterChart({
               : `${formatWeekday(day)}, ${time}`}
           </TooltipTitle>
           <TooltipRow label="Zählerstand" value={kwh(point.value)} />
-          <TooltipRow label="Quelle" value={sourceOf(point.ts)} tone="muted" />
+          <TooltipRow
+            label="Quelle"
+            value={sourceOf(point.ts, data.gaps)}
+            tone="muted"
+          />
         </>
       ),
     };

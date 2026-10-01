@@ -22,17 +22,16 @@ import {
   SERIES,
   type SeriesKey,
 } from "@/components/analysis/consumption-chart";
+import { useAnalysisData } from "@/components/analysis/analysis-source";
 import type { Drill } from "@/components/analysis/controls";
 import {
   eslReadings,
-  FIRST_ESL,
-  LAST_ESL,
   USAGE_SCOPE,
   usageTotals,
   valueCount,
   yearTotals,
   type YearTotals,
-} from "@/components/analysis/fake-analysis";
+} from "@/components/analysis/analysis-data";
 import {
   KpiCard,
   LegendPill,
@@ -41,8 +40,17 @@ import {
   rise,
   stagger,
 } from "@/components/analysis/parts";
-import { periodOf, periodParams } from "@/components/analysis/period";
-import { daysBetween, formatDay, GAPS } from "@/components/export/fake-export";
+import { useDataSummary } from "@/components/app-shell/use-data-summary";
+import {
+  intersect,
+  periodOf,
+  periodParams,
+} from "@/components/analysis/period";
+import {
+  daysBetween,
+  formatDay,
+  type DayRange,
+} from "@/components/export/export-data";
 import { IgnoredFilesDialog } from "@/components/import/ignored-files-dialog";
 import { useImportStore } from "@/components/import/import-store";
 import { EASE_OUT } from "@/components/motion-provider";
@@ -121,11 +129,34 @@ function DashboardView({
     consumption: true,
     feedIn: true,
   });
-  const data = USAGE_SCOPE.data;
-  const totals = useMemo(() => usageTotals(data), [data]);
-  const years = useMemo(() => yearTotals(), []);
-  const values = useMemo(() => valueCount(), []);
-  const eslCount = useMemo(() => eslReadings("ID742").length, []);
+  const sdatPeriod = useDataSummary()?.sdatPeriod;
+  const sdatFrom = sdatPeriod?.from;
+  const sdatTo = sdatPeriod?.to;
+  // the whole sdat period, the charts only cover the sample data years
+  const data = useMemo(
+    () =>
+      (sdatFrom &&
+        sdatTo &&
+        intersect({ from: sdatFrom, to: sdatTo }, USAGE_SCOPE.data)) ||
+      USAGE_SCOPE.data,
+    [sdatFrom, sdatTo],
+  );
+  const analysis = useAnalysisData();
+  const totals = useMemo(() => usageTotals(data, analysis), [data, analysis]);
+  const years = useMemo(
+    () =>
+      yearTotals(analysis).flatMap((year) => {
+        const range = intersect(year.range, data);
+        return range
+          ? [{ ...year, range, partial: range.to !== `${year.year}-12-31` }]
+          : [];
+      }),
+    [analysis, data],
+  );
+  const values = useMemo(() => valueCount(analysis), [analysis]);
+  const esl = eslReadings("ID742", analysis);
+  const firstEsl = esl[0]?.day ?? null;
+  const lastEsl = esl[esl.length - 1]?.day ?? null;
   const visibleCount = SERIES.filter((series) => visible[series.key]).length;
   const net = totals.consumption - totals.feedIn;
   const peak = totals.peak ? localParts(totals.peak.ts) : null;
@@ -240,17 +271,21 @@ function DashboardView({
             <Card>
               <h2 className="text-[15px] font-semibold">Hinweise</h2>
               <ul className="flex flex-col gap-3.5">
-                <Hint
-                  icon={Info}
-                  title={`SDAT-Daten enden am ${formatDay(data.to)}`}
-                  text={`Danach nur noch ESL-Ablesungen (bis ${formatDay(LAST_ESL)}).`}
-                />
-                <Hint
-                  icon={Info}
-                  title={`Zählerstand ${data.from.slice(0, 4)} zurückgerechnet`}
-                  text={`Vom ersten ESL-Wert (${formatDay(FIRST_ESL)}) aus.`}
-                />
-                <GapHint />
+                {lastEsl && lastEsl > data.to && (
+                  <Hint
+                    icon={Info}
+                    title={`SDAT-Daten enden am ${formatDay(data.to)}`}
+                    text={`Danach nur noch ESL-Ablesungen (bis ${formatDay(lastEsl)}).`}
+                  />
+                )}
+                {firstEsl && firstEsl > data.from && (
+                  <Hint
+                    icon={Info}
+                    title={`Zählerstand ${data.from.slice(0, 4)} zurückgerechnet`}
+                    text={`Vom ersten ESL-Wert (${formatDay(firstEsl)}) aus.`}
+                  />
+                )}
+                <GapHint gaps={analysis.gaps} />
                 {ignored.length > 0 && (
                   <Hint
                     icon={Info}
@@ -291,7 +326,11 @@ function DashboardView({
                 />
                 <Fact
                   label="ESL-Ablesungen"
-                  value={`${eslCount} pro Sensor, bis ${formatDay(LAST_ESL)}`}
+                  value={
+                    lastEsl
+                      ? `${esl.length} pro Sensor, bis ${formatDay(lastEsl)}`
+                      : "keine"
+                  }
                 />
                 <Fact
                   label="Dateien"
@@ -379,9 +418,9 @@ function Hint({
 }
 
 // «02/2020, 06/2020, 02/2021 und 03/2021 … (Lücken von 1–7 Tagen)»
-function GapHint() {
+function GapHint({ gaps }: { gaps: DayRange[] }) {
   const months = new Map<string, number>();
-  for (const gap of GAPS) {
+  for (const gap of gaps) {
     const key = `${gap.from.slice(5, 7)}/${gap.from.slice(0, 4)}`;
     months.set(key, (months.get(key) ?? 0) + daysBetween(gap.from, gap.to) + 1);
   }

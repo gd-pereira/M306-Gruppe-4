@@ -24,7 +24,7 @@ import {
   type DayRange,
   type ExportFormat,
   type ExportSelection,
-} from "./fake-export";
+} from "./export-data";
 import { useExportSource } from "./export-source";
 import { ModeTiles, RangePresets } from "./form-parts";
 import { PreviewCard } from "./preview-card";

@@ -4,7 +4,7 @@ import { area, curveMonotoneX, line } from "d3-shape";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo } from "react";
 import { EASE_OUT } from "@/components/motion-provider";
-import { yTicks } from "@/components/export/fake-export";
+import { yTicks } from "@/components/export/export-data";
 import { formatNumber } from "@/lib/format";
 import { bucketTitle, xTicksFor } from "./chart-axes";
 import type { Drill } from "./controls";
@@ -15,7 +15,7 @@ import {
   usageBuckets,
   usageRegions,
   type UsageBucket,
-} from "./fake-analysis";
+} from "./analysis-data";
 import { pagerLabel, resolutionOf, type Period } from "./period";
 import {
   DrawnPath,

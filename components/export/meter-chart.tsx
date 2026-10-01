@@ -17,7 +17,7 @@ import {
   sensorInfo,
   yTicks,
   type ExportSelection,
-} from "./fake-export";
+} from "./export-data";
 import { useExportSource } from "./export-source";
 import { useElementSize } from "./hooks";
 

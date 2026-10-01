@@ -4,7 +4,7 @@ import { Download, Send, type LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useId, useRef, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
-import { PRESETS, presetFor, type DayRange } from "./fake-export";
+import { PRESETS, presetFor, type DayRange } from "./export-data";
 import type { ExportMode } from "./selection";
 
 const MODES = [

@@ -3,7 +3,7 @@
 import { Select } from "@base-ui/react/select";
 import { Check, ChevronDown, Sun, Zap } from "lucide-react";
 import type { Direction, SensorId } from "@/lib/types";
-import { SENSORS, sensorInfo } from "./fake-export";
+import { SENSORS, sensorInfo } from "./export-data";
 
 const ICONS = { consumption: Zap, feedIn: Sun } satisfies Record<
   Direction,

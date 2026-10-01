@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { METER_SCOPE } from "@/components/analysis/fake-analysis";
+import { METER_SCOPE } from "@/components/analysis/analysis-data";
 import { MeterScreen } from "@/components/analysis/meter-screen";
 import { periodFromParams } from "@/components/analysis/period";
 import {

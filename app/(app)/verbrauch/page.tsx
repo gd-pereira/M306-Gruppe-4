@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ConsumptionScreen } from "@/components/analysis/consumption-screen";
-import { USAGE_SCOPE } from "@/components/analysis/fake-analysis";
+import { USAGE_SCOPE } from "@/components/analysis/analysis-data";
 import { periodFromParams } from "@/components/analysis/period";
 
 export const metadata: Metadata = { title: "Verbrauch" };

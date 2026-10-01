@@ -1,10 +1,5 @@
 import { SENSOR_IDS } from "@/lib/types";
-import {
-  buildFile,
-  fakeExportSource,
-  type DayRange,
-  type ExportSource,
-} from "./fake-export";
+import { buildFile, type DayRange, type ExportSource } from "./export-data";
 
 // stand-in for the POST from T4-6, sends the same body as the json export
 
@@ -125,8 +120,8 @@ export async function sendExport(
   url: ServerUrl,
   range: DayRange,
   signal: AbortSignal,
-  // the real readings after an import, see export-source.ts
-  source: ExportSource = fakeExportSource(),
+  // the imported readings, see export-source.ts
+  source: ExportSource,
 ): Promise<SendResult> {
   const body = await buildFile(
     { format: "json", sensor: SENSOR_IDS.consumption, range },

@@ -12,7 +12,8 @@ import {
   usageTotals,
   valueCount,
   type AnalysisData,
-} from "@/components/analysis/fake-analysis";
+} from "@/components/analysis/analysis-data";
+import { importView } from "@/components/import/import-view";
 import {
   addFile,
   buildResult,
@@ -60,6 +61,25 @@ describe("real analysis data", () => {
       1,
     );
     expect(totals.feedIn).toBeCloseTo(sum(result.feedIn.usage["15min"]), 1);
+  });
+
+  it("matches the dashboard mockup", () => {
+    const totals = usageTotals(all, data);
+    expect(Math.round(totals.consumption)).toBe(151_412);
+    expect(totals.peak?.value).toBeCloseTo(7.2, 1);
+  });
+
+  it("sums up the import page for all files", () => {
+    const { files, summary } = importView(result);
+    expect(files).toHaveLength(5180);
+    expect(files.filter((f) => f.status === "error")).toHaveLength(0);
+    expect(files.filter((f) => f.status === "ignored")).toHaveLength(1708);
+    expect(summary.eslFiles).toBe(47);
+    expect(summary.gapDays).toBe(11);
+    expect(summary.kwh.consumption).toBeCloseTo(
+      usageTotals(all, data).consumption,
+      0,
+    );
   });
 
   it("gives the same total on every resolution", () => {

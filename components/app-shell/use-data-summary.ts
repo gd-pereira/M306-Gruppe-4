@@ -1,5 +1,5 @@
 import { useImportStore } from "@/components/import/import-store";
-import type { DayRange } from "@/components/export/fake-export";
+import type { DayRange } from "@/components/export/export-data";
 import { formatDate } from "@/lib/format";
 
 export interface DataSummary {
@@ -35,7 +35,8 @@ export function useDataSummary(): DataSummary | null {
     firstYear: summary.period ? yearOf(summary.period.start) : 0,
     lastYear: summary.period ? yearOf(summary.period.end) : 0,
     sdatPeriod: summary.sdat
-      ? { from: dayOf(summary.sdat.start), to: dayOf(summary.sdat.end) }
+      ? // sdat.end is 00:00 after the last value, so the last day is the one before
+        { from: dayOf(summary.sdat.start), to: dayOf(summary.sdat.end - 1) }
       : null,
   };
 }
