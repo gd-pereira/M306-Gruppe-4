@@ -16,18 +16,20 @@ import { useImportStore } from "@/components/import/import-store";
 // when there are no data imported, the app runs in fullscreen on /import without a sidebar;
 // once data is imported, the sidebar slides in
 export function AppFrame({ children }: { children: ReactNode }) {
-  const { restoring } = useImportStore();
+  const { restoring, status } = useImportStore();
   const hasData = useDataSummary() !== null;
   const onboarded = useOnboarded();
+  const pathname = usePathname();
 
   // until hydration/restore finishes, css picks via boot script flag:
   const pending = (onboarded === null || restoring) && !hasData;
 
   // sidebar is only visible when there are data (or temporarily during initial restore if onboarded)
   const showSidebar = hasData || (restoring && onboarded === true);
-  const showBar = !hasData;
+  // the bar belongs to the empty import screen only, it collapses as soon as an import starts
+  const showBar =
+    !hasData && pathname === "/import" && status !== "importing";
 
-  const pathname = usePathname();
   const router = useRouter();
   const reduceMotion = useReducedMotion();
 
@@ -81,7 +83,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
         data-frame-guard={guarded || undefined}
         className="relative flex min-w-0 flex-1 flex-col gap-5 px-10 py-8"
       >
-        <AnimatePresence initial={false} mode="popLayout">
+        <AnimatePresence initial={false}>
           {showBar && <FullscreenBar key="bar" play={play} pending={pending} />}
         </AnimatePresence>
         {!redirecting && children}
@@ -95,11 +97,18 @@ function FullscreenBar({ play, pending }: { play: boolean; pending: boolean }) {
     <motion.header
       data-frame-bar
       data-pending={pending || undefined}
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, transition: { duration: play ? 0.15 : 0 } }}
+      initial={{ opacity: 0, y: -6, height: 72, marginBottom: 8 }}
+      animate={{ opacity: 1, y: 0, height: 72, marginBottom: 8 }}
+      exit={{
+        opacity: 0,
+        y: -8,
+        height: 0,
+        // with the -mt-8 and the 20px gap of main this ends exactly where the content sits without bar
+        marginBottom: 12,
+        transition: { duration: play ? 0.35 : 0, ease: EASE_OUT },
+      }}
       transition={{ duration: 0.35, ease: EASE_OUT }}
-      className="relative -mx-10 -mt-8 mb-2 flex h-[72px] items-center justify-between bg-card/60 px-10"
+      className="relative -mx-10 -mt-8 flex shrink-0 items-center justify-between overflow-hidden bg-card/60 px-10"
     >
       <motion.span
         aria-hidden
