@@ -8,6 +8,7 @@ import { formatDay } from "@/components/export/export-data";
 import { localParts } from "./chart-axes";
 import { Brush } from "./brush";
 import { ConsumptionChart, SERIES, type SeriesKey } from "./consumption-chart";
+import { ConsumptionInsights } from "./consumption-insights";
 import {
   Breadcrumb,
   drillProps,
@@ -191,6 +192,8 @@ function ConsumptionView({ initial }: { initial: Period }) {
         />
         <Brush period={period} onChange={change} />
       </motion.section>
+
+      <ConsumptionInsights period={period} onChange={change} />
     </motion.div>
   );
 }
