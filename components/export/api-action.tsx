@@ -11,7 +11,13 @@ import {
   type ExportStats,
 } from "./fake-export";
 import { AnimatedNumber } from "./hooks";
-import { ActionBar, ActionButton, periodOf } from "./summary-card";
+import {
+  ActionBar,
+  ActionButton,
+  periodOf,
+  WAITING_DETAIL,
+  WAITING_TITLE,
+} from "./summary-card";
 
 export type ApiState =
   | { kind: "idle" }
@@ -28,6 +34,7 @@ export function ApiAction({
   selection,
   stats,
   valid,
+  waiting,
   url,
   host,
   state,
@@ -36,6 +43,8 @@ export function ApiAction({
   selection: ExportSelection;
   stats: ExportStats;
   valid: boolean;
+  // the real import is still running, sending now would send the demo values
+  waiting: boolean;
   // "empty" while nothing is typed, "invalid" for an incomplete url
   url: "empty" | "invalid" | "ok";
   host: string;
@@ -44,17 +53,19 @@ export function ApiAction({
 }) {
   const sending = state.kind === "sending";
   const failed = state.kind === "done" && state.result.kind !== "sent";
-  const ready = valid && url === "ok";
+  const ready = valid && url === "ok" && !waiting;
 
-  const bar = !valid
-    ? { key: "range", title: "Nichts zu senden" }
-    : sending
-      ? { key: "sending", title: `Wird an ${state.host} gesendet …` }
-      : url === "empty"
-        ? { key: "empty", title: "Server-URL eingeben" }
-        : url === "invalid"
-          ? { key: "invalid", title: "Keine gültige URL" }
-          : { key: "ready", title: `An ${host} senden` };
+  const bar = waiting
+    ? { key: "waiting", title: WAITING_TITLE }
+    : !valid
+      ? { key: "range", title: "Nichts zu senden" }
+      : sending
+        ? { key: "sending", title: `Wird an ${state.host} gesendet …` }
+        : url === "empty"
+          ? { key: "empty", title: "Server-URL eingeben" }
+          : url === "invalid"
+            ? { key: "invalid", title: "Keine gültige URL" }
+            : { key: "ready", title: `An ${host} senden` };
 
   return (
     <div className="flex flex-col">
@@ -63,9 +74,11 @@ export function ApiAction({
         title={bar.title}
         size={ready || sending ? formatBytes(stats.bytes) : undefined}
         idle={!ready && !sending}
-        danger={!valid}
+        danger={!valid && !waiting}
         detail={
-          valid ? (
+          waiting ? (
+            WAITING_DETAIL
+          ) : valid ? (
             <>
               <AnimatedNumber value={stats.values} /> Werte ·{" "}
               {stats.sensors.length} Sensoren · JSON · {periodOf(selection)}

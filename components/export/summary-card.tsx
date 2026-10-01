@@ -248,16 +248,24 @@ export function ActionButton({
   );
 }
 
+// shown while the real import still runs, until then the screen only has the demo curve
+export const WAITING_TITLE = "Daten werden noch eingelesen …";
+export const WAITING_DETAIL =
+  "Export ist möglich, sobald der Import fertig ist";
+
 export function FileAction({
   selection,
   stats,
   valid,
+  waiting,
   downloading,
   onDownload,
 }: {
   selection: ExportSelection;
   stats: ExportStats;
   valid: boolean;
+  // the real import is still running, a download now would have the demo values
+  waiting: boolean;
   downloading: boolean;
   onDownload: () => void;
 }) {
@@ -265,13 +273,15 @@ export function FileAction({
   const period = periodOf(selection);
   return (
     <ActionBar
-      swapKey={valid ? "file" : "none"}
-      title={valid ? stats.fileName : "Keine Datei"}
-      size={valid ? formatBytes(stats.bytes) : undefined}
-      idle={!valid}
-      danger={!valid}
+      swapKey={waiting ? "waiting" : valid ? "file" : "none"}
+      title={waiting ? WAITING_TITLE : valid ? stats.fileName : "Keine Datei"}
+      size={valid && !waiting ? formatBytes(stats.bytes) : undefined}
+      idle={!valid || waiting}
+      danger={!valid && !waiting}
       detail={
-        valid ? (
+        waiting ? (
+          WAITING_DETAIL
+        ) : valid ? (
           <>
             <AnimatedNumber value={stats.values} /> Werte ·{" "}
             {selection.format === "json"
@@ -293,7 +303,7 @@ export function FileAction({
       <ActionButton
         icon={Download}
         busy={downloading}
-        disabled={!valid}
+        disabled={!valid || waiting}
         onClick={onDownload}
       >
         Herunterladen

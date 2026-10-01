@@ -122,7 +122,11 @@ function MeterView({
 
   useEffect(() => {
     const params = new URLSearchParams({ sensor, ...periodParams(period) });
-    if (back) params.set("quelle", "export");
+    if (back) {
+      params.set("quelle", "export");
+      // keep the export format, otherwise a reload here leads back to csv
+      if (back.includes("format=json")) params.set("format", "json");
+    }
     window.history.replaceState(null, "", `?${params}`);
   }, [sensor, period, back]);
 

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { EASE_OUT } from "@/components/motion-provider";
 import { SegmentedTabs } from "@/components/import/table-parts";
 import { toast } from "@/components/ui/toaster";
+import { useDataStore } from "@/lib/data-store";
 import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
 import { ApiAction, type ApiState } from "./api-action";
@@ -83,6 +84,8 @@ export function ExportScreen({
   );
   // real meter readings after an import, the demo curve before
   const source = useExportSource();
+  // while the real import runs the screen still has the demo curve, so nothing may leave it
+  const waiting = useDataStore().status === "importing";
   const stats = useMemo(
     () => exportStats(selection, source),
     [selection, source],
@@ -112,7 +115,7 @@ export function ExportScreen({
   }
 
   async function download() {
-    if (!valid || downloading) return;
+    if (!valid || downloading || waiting) return;
     setDownloading(true);
     const current = { selection, stats, source };
     try {
@@ -144,7 +147,7 @@ export function ExportScreen({
 
   async function send() {
     setUrlTouched(true);
-    if (!server || !valid || sending) return;
+    if (!server || !valid || sending || waiting) return;
     const controller = new AbortController();
     request.current = controller;
     const sent = {
@@ -312,6 +315,7 @@ export function ExportScreen({
                   selection={selection}
                   stats={stats}
                   valid={valid}
+                  waiting={waiting}
                   url={urlStatus}
                   host={target.host}
                   state={apiState}
@@ -322,6 +326,7 @@ export function ExportScreen({
                   selection={selection}
                   stats={stats}
                   valid={valid}
+                  waiting={waiting}
                   downloading={downloading}
                   onDownload={download}
                 />
@@ -335,6 +340,7 @@ export function ExportScreen({
             selection={selection}
             stats={stats}
             valid={valid}
+            waiting={waiting}
             request={api ? target : undefined}
           />
         </motion.div>

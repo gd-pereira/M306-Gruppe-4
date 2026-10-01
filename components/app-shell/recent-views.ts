@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import {
   formatDay,
+  fileName,
   formatDayRange,
   isDayKey,
   type DayRange,
@@ -69,8 +70,9 @@ export function viewFromLocation(
     if (params.get("modus") === "api") {
       return { page, label: "An API senden", href };
     }
-    const { sensor, format } = selectionFromParams(Object.fromEntries(params));
-    return { page, label: `${sensor}.${format}`, href };
+    // the name of the file, json has both sensors in zaehlerstaende.json
+    const selection = selectionFromParams(Object.fromEntries(params));
+    return { page, label: fileName(selection), href };
   }
 
   const from = params.get("von");

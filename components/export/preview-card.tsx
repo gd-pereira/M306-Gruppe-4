@@ -19,11 +19,14 @@ export function PreviewCard({
   selection,
   stats,
   valid,
+  waiting,
   request,
 }: {
   selection: ExportSelection;
   stats: ExportStats;
   valid: boolean;
+  // the real import is still running, the preview has the demo values and may not be copied
+  waiting: boolean;
   // api mode: the http request head comes before the json
   request?: RequestTarget;
 }) {
@@ -51,7 +54,7 @@ export function PreviewCard({
   }, [copied]);
 
   async function copy() {
-    if (!content) return;
+    if (!content || waiting) return;
     try {
       await navigator.clipboard.writeText(content.lines.join("\n"));
       setCopied(true);
@@ -89,7 +92,7 @@ export function PreviewCard({
         <button
           type="button"
           onClick={copy}
-          disabled={!content}
+          disabled={!content || waiting}
           className={cn(
             "-mr-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:text-border-strong disabled:hover:bg-transparent",
             copied ? "text-success-strong" : "text-soft-foreground",
