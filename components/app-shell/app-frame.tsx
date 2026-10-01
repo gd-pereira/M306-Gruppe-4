@@ -88,7 +88,13 @@ function FullscreenBar({ play, pending }: { play: boolean; pending: boolean }) {
       transition={{ duration: 0.35, ease: EASE_OUT }}
       className="flex items-center justify-between pb-3"
     >
-      <FluxLogo className="h-7 w-auto text-foreground" />
+      <Link
+        href="/dashboard"
+        aria-label="Zum Dashboard"
+        className="rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <FluxLogo className="h-7 w-auto text-foreground" />
+      </Link>
       <Link
         href="/login"
         className={buttonVariants({ variant: "outline", size: "sm" })}

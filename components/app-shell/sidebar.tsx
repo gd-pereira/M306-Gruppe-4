@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, PanelLeft, Search } from "lucide-react";
+import { Lock, Search } from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -109,21 +109,15 @@ function OpenSidebar({
 
   return (
     <div className="flex h-full w-61 flex-col px-3.5 pt-4 pb-3.5">
-      <div className="flex items-center justify-between pr-0.5 pb-[18px] pl-1.5">
-        <FluxLogo className="h-7 w-auto text-sidebar-accent-foreground" />
-        <Tooltip label="Sidebar einklappen" sideOffset={24}>
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            aria-label="Sidebar einklappen"
-            className={cn(
-              "flex size-7 items-center justify-center rounded-lg text-sidebar-icon transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-accent-foreground active:translate-y-px",
-              FOCUS_RING,
-            )}
-          >
-            <PanelLeft className="size-4" />
-          </button>
-        </Tooltip>
+      <div className="flex items-center justify-between pb-[18px] pl-1.5">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Sidebar einklappen"
+          className="flex items-center rounded-md transition-opacity hover:opacity-80 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          <FluxLogo className="h-7 w-auto text-sidebar-accent-foreground" />
+        </button>
       </div>
 
       <button
@@ -465,7 +459,14 @@ function CollapsedSidebar({
 
   return (
     <div className="flex h-full w-16 flex-col items-center px-2.5 pt-4 pb-3.5">
-      <FluxMark className="h-7 w-[30.4px] shrink-0 text-sidebar-accent-foreground" />
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-label="Sidebar ausklappen"
+        className="flex items-center rounded-md transition-opacity hover:opacity-80 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+      >
+        <FluxMark className="h-7 w-[30.4px] shrink-0 text-sidebar-accent-foreground" />
+      </button>
 
       <Tooltip label="Suchen" shortcut={`${mod} K`} delay={250} sideOffset={18}>
         <button
@@ -514,20 +515,6 @@ function CollapsedSidebar({
 
       <MiniBalance summary={summary} />
 
-      <Tooltip label="Sidebar ausklappen" delay={250} sideOffset={20}>
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          aria-label="Sidebar ausklappen"
-          className={cn(
-            "mt-3 flex h-9 w-10 shrink-0 items-center justify-center rounded-[10px] text-sidebar-icon transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-accent-foreground active:translate-y-px",
-            FOCUS_RING,
-          )}
-        >
-          <PanelLeft className="size-[18px]" />
-        </button>
-      </Tooltip>
-
       <Tooltip
         label="App sperren"
         hint="Lokal gespeichert"
@@ -538,7 +525,7 @@ function CollapsedSidebar({
           href="/login"
           aria-label="App sperren"
           className={cn(
-            "relative mt-1 flex h-9 w-10 shrink-0 items-center justify-center rounded-[10px] bg-sidebar-accent text-sidebar-placeholder transition-colors duration-150 hover:text-sidebar-accent-foreground active:translate-y-px",
+            "relative mt-3 flex h-9 w-10 shrink-0 items-center justify-center rounded-[10px] bg-sidebar-accent text-sidebar-placeholder transition-colors duration-150 hover:text-sidebar-accent-foreground active:translate-y-px",
             FOCUS_RING,
           )}
         >
