@@ -8,8 +8,10 @@ import {
 import {
   eslAround,
   eslReadings,
+  hourProfile,
   isIncomplete,
   METER_SCOPE,
+  monthComparison,
   meterLine,
   meterRegions,
   rangeEnd,
@@ -325,6 +327,62 @@ describe("zählerstand data", () => {
     expect(sourceSegments(april.range).map((s) => s.kind)).toEqual([
       "measured",
     ]);
+  });
+});
+
+describe("could charts", () => {
+  it("averages the usage per weekday and hour", () => {
+    const data = fakeAnalysisData();
+    const profile = hourProfile(april.range, "feedIn", data);
+    expect(profile.cells).toHaveLength(7);
+    expect(profile.cells.every((row) => row.length === 24)).toBe(true);
+    // no sun at night, most at noon
+    expect(profile.cells[0][2]).toBe(0);
+    expect(profile.cells[0][12]).toBeGreaterThan(0);
+    expect(profile.max).toBe(
+      Math.max(...profile.cells.flat().map((value) => value ?? 0)),
+    );
+  });
+
+  it("sums one day back to its total and knows the short day", () => {
+    const data = fakeAnalysisData();
+    // wednesday
+    const day = { from: "2021-04-07", to: "2021-04-07" };
+    const row = hourProfile(day, "consumption", data).cells[2];
+    const total = row.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    expect(total).toBeCloseTo(usageTotals(day, data).consumption, 6);
+    // sunday 28.03.2021 has no 02:00
+    const short = hourProfile(
+      { from: "2021-03-28", to: "2021-03-28" },
+      "consumption",
+      data,
+    ).cells[6];
+    expect(short[2]).toBeNull();
+    expect(short.filter((value) => value !== null)).toHaveLength(23);
+  });
+
+  it("leaves gap days out of the profile", () => {
+    const data = fakeAnalysisData();
+    // sunday 09.02.2020 is a gap day
+    const gap = { from: "2020-02-09", to: "2020-02-09" };
+    expect(hourProfile(gap, "consumption", data).cells[6][12]).toBeNull();
+  });
+
+  it("puts the same month of every year next to each other", () => {
+    const data = fakeAnalysisData();
+    const comparison = monthComparison("consumption", data);
+    expect(comparison.years).toEqual([2018, 2019, 2020, 2021]);
+    expect(comparison.months).toHaveLength(12);
+    // september 2021 is cut off, october to december have no data
+    for (const month of [8, 9, 10, 11]) {
+      expect(comparison.months[month][3]).toBeNull();
+    }
+    expect(comparison.months[1][3]?.missingDays).toBe(7);
+    const year2019 = comparison.months.reduce(
+      (sum, month) => sum + (month[1]?.value ?? 0),
+      0,
+    );
+    expect(year2019).toBeCloseTo(yearTotals(data)[1].consumption, 3);
   });
 });
 

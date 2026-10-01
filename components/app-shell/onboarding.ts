@@ -30,6 +30,18 @@ export function markOnboarded(): void {
   }
 }
 
+export function clearOnboarded(): void {
+  try {
+    localStorage.removeItem(ONBOARDED_KEY);
+  } catch {
+    // storage blocked
+  }
+  delete document.documentElement.dataset.onboarded;
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
 // null while server rendering and hydrating, the boot script and css cover that moment
 export function useOnboarded(): boolean | null {
   return useSyncExternalStore<boolean | null>(subscribe, read, () => null);

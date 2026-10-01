@@ -98,7 +98,7 @@ export function KpiCard({
           kWh
         </span>
       </span>
-      <Swap value={sub} className="text-xs text-faint" />
+      <Swap value={sub} className="text-xs text-muted-foreground" />
     </motion.div>
   );
 }

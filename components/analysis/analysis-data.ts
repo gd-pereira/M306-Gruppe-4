@@ -464,6 +464,93 @@ export function yearTotals(data: AnalysisData): YearTotals[] {
   return years;
 }
 
+export interface HourProfile {
+  // [weekday, 0 = monday][hour] average kWh per hour, null without sdat
+  cells: (number | null)[][];
+  max: number;
+}
+
+// local hour of the k-th interval on a day with n intervals:
+// 92 on the day the clocks go forward (no 02:00), 100 when they go back (02:00 twice)
+function localHour(k: number, n: number): number {
+  const hour = Math.floor(k / 4);
+  if (n === 92) return hour >= 2 ? hour + 1 : hour;
+  if (n === 100) return hour < 3 ? hour : hour - 1;
+  return hour;
+}
+
+// average usage per weekday and hour in the range, gap days are left out
+export function hourProfile(
+  range: DayRange,
+  direction: Direction,
+  data: AnalysisData,
+): HourProfile {
+  const values = data.usage[SENSOR_IDS[direction]];
+  const sums = Array.from({ length: 7 }, () => new Float64Array(24));
+  const counts = Array.from({ length: 7 }, () => new Uint32Array(24));
+  for (const day of daysIn(range, data)) {
+    if (day.gap) continue;
+    const weekday = (new Date(`${day.key}T00:00:00Z`).getUTCDay() + 6) % 7;
+    const n = day.b - day.a;
+    for (let k = 0; k < n; k++) {
+      const hour = localHour(k, n);
+      sums[weekday][hour] += values[day.a + k];
+      counts[weekday][hour]++;
+    }
+  }
+  let max = 0;
+  const cells = sums.map((row, weekday) =>
+    Array.from(row, (sum, hour) => {
+      const count = counts[weekday][hour];
+      if (count === 0) return null;
+      const value = (sum / count) * 4;
+      if (value > max) max = value;
+      return value;
+    }),
+  );
+  return { cells, max };
+}
+
+export interface MonthValue {
+  value: number;
+  missingDays: number;
+}
+
+export interface MonthComparison {
+  years: number[];
+  // [month 0-11][index in years], null for months without complete data
+  months: (MonthValue | null)[][];
+  max: number;
+}
+
+// the same month next to each other over the years, cut-off months are left out
+export function monthComparison(
+  direction: Direction,
+  data: AnalysisData,
+): MonthComparison {
+  const { from, to } = USAGE_SCOPE.data;
+  const first = Number(from.slice(0, 4));
+  const years = Array.from(
+    { length: Number(to.slice(0, 4)) - first + 1 },
+    (_, i) => first + i,
+  );
+  const months: (MonthValue | null)[][] = Array.from({ length: 12 }, () =>
+    years.map(() => null),
+  );
+  let max = 0;
+  for (const bucket of usageBuckets(USAGE_SCOPE.data, "month", data)) {
+    const value = bucket[direction];
+    if (value === null) continue;
+    const [year, month] = dayOf(bucket.start).split("-").map(Number);
+    months[month - 1][year - first] = {
+      value,
+      missingDays: bucket.missingDays,
+    };
+    if (value > max) max = value;
+  }
+  return { years, months, max };
+}
+
 // 15 min values per sensor, gap days have none
 export function valueCount(data: AnalysisData): number {
   const { count, gap } = data;

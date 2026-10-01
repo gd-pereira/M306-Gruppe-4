@@ -8,6 +8,7 @@ import {
   type DataState,
 } from "@/lib/data-store";
 import { clearSavedData } from "@/lib/saved-data";
+import { clearOnboarded } from "@/components/app-shell/onboarding";
 import { loadDemoFiles } from "./demo-files";
 import { importView, isXml, type ImportView } from "./import-view";
 
@@ -109,6 +110,7 @@ export function cancelImport(): void {
 export async function deleteSavedData(): Promise<void> {
   resetDataStore();
   setLocal({ failure: null, restoring: false });
+  clearOnboarded();
   await clearSavedData();
 }
 
