@@ -18,7 +18,8 @@ import {
 
 const ROOT = path.resolve(__dirname, "..");
 const BILDER = path.join(ROOT, "public", "praesentation");
-const AUSGABE = path.join(ROOT, "praesentation.pptx");
+const AUSGABE =
+  process.env.PPTX_AUSGABE ?? path.join(ROOT, "praesentation.pptx");
 
 // 16:9, 10 × 5.625 Zoll
 const FARBE = {
@@ -30,6 +31,8 @@ const FARBE = {
   flaeche: "#F6F6F4",
   todo: "#C2410C",
   weiss: "#FFFFFF",
+  schwarz: "#0B0C0E",
+  silber: "#C9C9C9",
 };
 const SCHRIFT = "Segoe UI";
 const SCHRIFT_FETT = "Segoe UI Semibold";
@@ -122,10 +125,10 @@ function Kopf({ titel, untertitel }: { titel: string; untertitel?: string }) {
       <Text
         style={{
           x: RAND,
-          y: 0.36,
+          y: 0.4,
           w: BREITE,
           h: 0.66,
-          fontSize: 24,
+          fontSize: 26,
           fontFace: SCHRIFT_FETT,
           color: FARBE.dunkel,
           verticalAlign: "bottom",
@@ -134,20 +137,16 @@ function Kopf({ titel, untertitel }: { titel: string; untertitel?: string }) {
       >
         {titel}
       </Text>
-      <Rechteck
-        box={{ x: RAND, y: 1.07, w: 0.55, h: 0.055 }}
-        farbe={FARBE.gelb}
-      />
       {untertitel ? (
         <Text
           style={{
             x: RAND,
-            y: 1.17,
+            y: 1.1,
             w: BREITE,
-            h: 0.34,
-            fontSize: 13,
+            h: 0.32,
+            fontSize: 12,
             fontFace: SCHRIFT,
-            color: FARBE.grau,
+            color: FARBE.hell,
             margin: 0,
           }}
         >
@@ -158,69 +157,23 @@ function Kopf({ titel, untertitel }: { titel: string; untertitel?: string }) {
   );
 }
 
+// Teil der Agenda links, Foliennummer rechts
 function Fuss({ nr, teil }: { nr: number; teil: Teil }) {
-  const y = 5.2;
-  const start = 2.35;
-  const breite = 1.24;
+  const stil = {
+    y: 5.15,
+    h: 0.24,
+    fontSize: 9,
+    fontFace: SCHRIFT,
+    color: FARBE.hell,
+    margin: 0,
+  };
   return (
     <>
-      <Text
-        style={{
-          x: RAND,
-          y,
-          w: 1.7,
-          h: 0.24,
-          fontSize: 8,
-          fontFace: SCHRIFT,
-          color: FARBE.hell,
-          margin: 0,
-        }}
-      >
-        Flux · M306 Gruppe 4
-      </Text>
-      {teil === null
-        ? null
-        : TEILE.map((name, index) => (
-            <Fragment key={name}>
-              <Rechteck
-                box={{
-                  x: start + index * breite,
-                  y: y - 0.05,
-                  w: breite - 0.08,
-                  h: 0.025,
-                }}
-                farbe={index === teil ? FARBE.gelb : FARBE.linie}
-              />
-              <Text
-                style={{
-                  x: start + index * breite,
-                  y,
-                  w: breite - 0.08,
-                  h: 0.24,
-                  fontSize: 7,
-                  fontFace: index === teil ? SCHRIFT_FETT : SCHRIFT,
-                  color: index === teil ? FARBE.dunkel : FARBE.hell,
-                  margin: 0,
-                }}
-              >
-                {name}
-              </Text>
-            </Fragment>
-          ))}
-      <Text
-        style={{
-          x: 8.9,
-          y,
-          w: 0.5,
-          h: 0.24,
-          fontSize: 8,
-          fontFace: SCHRIFT,
-          color: FARBE.hell,
-          align: "right",
-          margin: 0,
-        }}
-      >
-        {String(nr).padStart(2, "0")}
+      {teil === null ? null : (
+        <Text style={{ ...stil, x: RAND, w: 3 }}>{TEILE[teil]}</Text>
+      )}
+      <Text style={{ ...stil, x: 8.9, w: 0.5, align: "right" }}>
+        {String(nr)}
       </Text>
     </>
   );
@@ -247,14 +200,15 @@ function Punkte({
       }}
     >
       {items.map((item) => (
+        // react-pptx kennt keine Absätze ohne Aufzählung, das Zeichen ohne Breite bleibt unsichtbar
         <Text.Bullet
           key={item}
-          characterCode="2013"
-          indent={16}
+          characterCode="200B"
+          indent={1}
           style={{
             color: isTodo(item) ? FARBE.todo : FARBE.dunkel,
             italic: isTodo(item),
-            paraSpaceAfter: 7,
+            paraSpaceAfter: 12,
           }}
         >
           {item}
@@ -294,6 +248,18 @@ function Absatz({
     >
       {text}
     </Text>
+  );
+}
+
+function Trenner({ y }: { y: number }) {
+  return (
+    <Line
+      x1={RAND}
+      x2={RAND + BREITE}
+      y1={y}
+      y2={y}
+      style={{ color: FARBE.linie, width: 0.75 }}
+    />
   );
 }
 
@@ -361,44 +327,78 @@ interface Basis {
   notes: string;
 }
 
-function TitelFolie({ nr, notes }: Omit<Basis, "teil">) {
-  const logo = bild("flux-logo.png");
+const TEAM_ZEILE =
+  "Lasse Nothelfer · Ennio Vögeli · Gonçalo Pereira · Paul Kühn · Elias Hüngerle";
+
+// Titel und Schluss auf dem Datenbild von scripts/cover.ts
+function DunkleFolie({
+  notes,
+  titel,
+  untertitel,
+  fusszeile,
+}: {
+  notes: string;
+  titel: string;
+  untertitel: string;
+  fusszeile: string;
+}) {
+  const cover = bild("cover.png");
   return (
-    <Slide notes={notes} style={{ backgroundColor: FARBE.weiss }}>
-      <Rechteck box={{ x: 0, y: 0, w: 0.16, h: 5.625 }} farbe={FARBE.gelb} />
-      <Image
-        src={{ kind: "data", data: logo.data }}
-        style={{ x: 0.8, y: 0.62, w: 2.2, h: 2.2 / logo.verhaeltnis }}
-      />
-      <Absatz
-        text="Software zur Visualisierung von sdat- und ESL-Zählerdaten"
-        box={{ x: 0.8, y: 1.85, w: 8.2, h: 1.2 }}
-        groesse={32}
-        farbe={FARBE.dunkel}
-        fett
-      />
-      <Absatz
-        text="Projektpräsentation · Modul 306 · Gruppe 4"
-        box={{ x: 0.8, y: 3.12, w: 8.2, h: 0.4 }}
-        groesse={16}
-      />
-      <Rechteck
-        box={{ x: 0.8, y: 3.86, w: 0.55, h: 0.055 }}
-        farbe={FARBE.gelb}
-      />
-      <Absatz
-        text="Lasse Nothelfer · Ennio Vögeli · Gonçalo Pereira · Paul Kühn · Elias Hüngerle"
-        box={{ x: 0.8, y: 4.05, w: 8.4, h: 0.3 }}
-        groesse={12}
-        farbe={FARBE.dunkel}
-      />
-      <Absatz
-        text="Auftraggeber: Energieagentur Bünzli, Roger Bünzli · KSH / IM24 · Lehrperson: André Probst · 02.10.2026"
-        box={{ x: 0.8, y: 4.4, w: 8.4, h: 0.3 }}
-        groesse={11}
-      />
-      <Fuss nr={nr} teil={null} />
+    <Slide
+      notes={notes}
+      style={{
+        backgroundColor: FARBE.schwarz,
+        backgroundImage: { kind: "data", data: cover.data },
+      }}
+    >
+      <>
+        <Absatz
+          text={titel}
+          box={{ x: RAND, y: 0.38, w: 6, h: 0.95 }}
+          groesse={60}
+          farbe={FARBE.weiss}
+          fett
+        />
+        <Absatz
+          text={untertitel}
+          box={{ x: RAND, y: 1.3, w: 6.5, h: 0.4 }}
+          groesse={14}
+          farbe={FARBE.silber}
+        />
+        <Absatz
+          text={
+            "Jede Linie ist eine Stunde Messdaten aus 2020\noben Einspeisung, unten Bezug"
+          }
+          box={{ x: 6.2, y: 0.5, w: 3.2, h: 0.5 }}
+          groesse={9}
+          farbe={FARBE.hell}
+          ausrichtung="right"
+        />
+        <Absatz
+          text={TEAM_ZEILE}
+          box={{ x: RAND, y: 4.98, w: BREITE, h: 0.26 }}
+          groesse={11}
+          farbe={FARBE.silber}
+        />
+        <Absatz
+          text={fusszeile}
+          box={{ x: RAND, y: 5.24, w: BREITE, h: 0.24 }}
+          groesse={8}
+          farbe={FARBE.hell}
+        />
+      </>
     </Slide>
+  );
+}
+
+function TitelFolie({ notes }: Omit<Basis, "teil">) {
+  return (
+    <DunkleFolie
+      notes={notes}
+      titel="Flux"
+      untertitel="Software zur Visualisierung von sdat- und ESL-Zählerdaten"
+      fusszeile="Projektpräsentation Modul 306 · Gruppe 4 · Auftraggeber: Energieagentur Bünzli, Roger Bünzli · KSH / IM24 · Lehrperson: André Probst · 02.10.2026"
+    />
   );
 }
 
@@ -556,44 +556,14 @@ function ZweiSpalten({
   );
 }
 
-function AbschlussFolie({ nr, notes }: Omit<Basis, "teil">) {
-  const logo = bild("flux-logo.png");
+function AbschlussFolie({ notes }: Omit<Basis, "teil">) {
   return (
-    <Slide notes={notes} style={{ backgroundColor: FARBE.weiss }}>
-      <Rechteck box={{ x: 0, y: 0, w: 0.16, h: 5.625 }} farbe={FARBE.gelb} />
-      <Absatz
-        text="Danke für Ihre Aufmerksamkeit."
-        box={{ x: 0.8, y: 1.45, w: 8.4, h: 0.8 }}
-        groesse={36}
-        farbe={FARBE.dunkel}
-        fett
-      />
-      <Absatz
-        text="Wir freuen uns auf Ihre Fragen und das Fachgespräch."
-        box={{ x: 0.8, y: 2.3, w: 8.4, h: 0.45 }}
-        groesse={18}
-      />
-      <Rechteck
-        box={{ x: 0.8, y: 3.0, w: 0.55, h: 0.055 }}
-        farbe={FARBE.gelb}
-      />
-      <Absatz
-        text="Lasse Nothelfer · Ennio Vögeli · Gonçalo Pereira · Paul Kühn · Elias Hüngerle"
-        box={{ x: 0.8, y: 3.2, w: 8.4, h: 0.3 }}
-        groesse={12}
-        farbe={FARBE.dunkel}
-      />
-      <Absatz
-        text="Quellen und Lizenzen der verwendeten Bibliotheken: Projektdokumentation, Kapitel 8"
-        box={{ x: 0.8, y: 3.55, w: 8.4, h: 0.3 }}
-        groesse={11}
-      />
-      <Image
-        src={{ kind: "data", data: logo.data }}
-        style={{ x: 7.4, y: 4.3, w: 1.9, h: 1.9 / logo.verhaeltnis }}
-      />
-      <Fuss nr={nr} teil={null} />
-    </Slide>
+    <DunkleFolie
+      notes={notes}
+      titel="Danke."
+      untertitel="Wir freuen uns auf Ihre Fragen und das Fachgespräch."
+      fusszeile="Quellen und Lizenzen der verwendeten Bibliotheken: Projektdokumentation, Kapitel 8"
+    />
   );
 }
 
@@ -668,7 +638,7 @@ const folien = [
         "Lasse · 0:20 (bis 0:50)\n" +
         "Wir folgen in der Präsentation den IPERKA-Phasen, genau wie im Projekt und in der Dokumentation. " +
         "Nach Auftrag und Team zeigen wir Planung und Entscheide, dann die Umsetzung mit Live-Demo und zum Schluss Tests und Reflexion. " +
-        "Unten auf jeder Folie sehen Sie, in welchem Teil wir gerade sind."
+        "Unten links auf jeder Folie steht, in welchem Teil wir gerade sind."
       }
     >
       {agenda.map(([name, inhalt, zeit], index) => {
@@ -736,10 +706,6 @@ const folien = [
         "Verarbeitet werden nur die Sensoren ID742 für den Bezug und ID735 für die Einspeisung, das hat Herr Bünzli per E-Mail bestätigt."
       }
     >
-      <Rechteck
-        box={{ x: 6.35, y: OBEN, w: 3.05, h: UNTEN - OBEN }}
-        farbe={FARBE.flaeche}
-      />
       <Kennzahl
         wert="5'133"
         label="sdat-Dateien, Verbrauch pro 15 Min."
@@ -958,19 +924,15 @@ const folien = [
           </Fragment>
         );
       })}
-      <Rechteck
-        box={{ x: 5.55, y: OBEN, w: 3.85, h: 2.75 }}
-        farbe={FARBE.flaeche}
-      />
       <Absatz
         text="Grösste Risiken"
-        box={{ x: 5.8, y: OBEN + 0.18, w: 3.4, h: 0.32 }}
+        box={{ x: 5.55, y: OBEN, w: 3.85, h: 0.32 }}
         groesse={14}
         farbe={FARBE.dunkel}
         fett
       />
       <Punkte
-        box={{ x: 5.8, y: OBEN + 0.62, w: 3.4, h: 2.6 }}
+        box={{ x: 5.55, y: OBEN + 0.48, w: 3.85, h: 2.6 }}
         groesse={12}
         items={[
           "R1 Sensor-IDs wechseln ab 2023 (Wert 9): Richtung aus dem XML-Element, im Parser gelöst",
@@ -1029,19 +991,19 @@ const folien = [
         return (
           <Fragment key={index}>
             <Rechteck
-              box={{ x, y: OBEN + 0.05, w, h: 0.95 }}
-              farbe={index === 1 ? FARBE.gelb : FARBE.flaeche}
+              box={{ x, y: OBEN + 0.05, w, h: 0.03 }}
+              farbe={index === 1 ? FARBE.gelb : FARBE.dunkel}
             />
             <Absatz
               text={String(index + 1)}
-              box={{ x: x + 0.12, y: OBEN + 0.13, w: 0.4, h: 0.25 }}
+              box={{ x, y: OBEN + 0.18, w: 0.4, h: 0.25 }}
               groesse={10}
-              farbe={FARBE.grau}
+              farbe={FARBE.hell}
             />
             <Absatz
               text={schritt}
-              box={{ x: x + 0.12, y: OBEN + 0.4, w: w - 0.2, h: 0.55 }}
-              groesse={11}
+              box={{ x, y: OBEN + 0.42, w, h: 0.55 }}
+              groesse={12}
               farbe={FARBE.dunkel}
               fett
             />
@@ -1093,20 +1055,17 @@ const folien = [
         "Im Nachtest T04b stimmen Start- und Endwerte, und der Zählerstand ist nie mehr negativ."
       }
     >
-      <Rechteck
-        box={{ x: RAND, y: 4.18, w: BREITE, h: 0.72 }}
-        farbe={FARBE.flaeche}
-      />
+      <Trenner y={4.12} />
       <Absatz
         text="Ergebnis"
-        box={{ x: RAND + 0.2, y: 4.27, w: 2, h: 0.3 }}
+        box={{ x: RAND, y: 4.27, w: 2, h: 0.3 }}
         groesse={12}
         farbe={FARBE.dunkel}
         fett
       />
       <Absatz
         text="Der Zählerstand steigt stetig: 2018 beginnt er bei 3'569.9 kWh (Bezug) und 6'435.3 kWh (Einspeisung)"
-        box={{ x: RAND + 0.2, y: 4.53, w: BREITE - 0.4, h: 0.32 }}
+        box={{ x: RAND, y: 4.53, w: BREITE, h: 0.32 }}
         groesse={12}
         farbe={FARBE.dunkel}
       />
@@ -1208,10 +1167,6 @@ const folien = [
         "Im Systemtest wurden die sdat- und ESL-Dateien ohne Fehler gelesen, und der Fehler aus T04 wurde mit der neuen Berechnung behoben und nachgetestet."
       }
     >
-      <Rechteck
-        box={{ x: 6.35, y: OBEN, w: 3.05, h: 2.65 }}
-        farbe={FARBE.flaeche}
-      />
       <Kennzahl
         wert="223"
         label="automatisierte Tests in 19 Dateien, alle grün (Stand 01.10.2026)"
@@ -1280,20 +1235,17 @@ const folien = [
         "Nächstes Mal schätzen wir die Tickets auf dem Board, gehen schwierige Aufgaben früher an, planen einen Zeitpuffer und führen ein kurzes Daily ein."
       }
     >
-      <Rechteck
-        box={{ x: RAND, y: 4.18, w: BREITE, h: 0.72 }}
-        farbe={FARBE.flaeche}
-      />
+      <Trenner y={4.12} />
       <Absatz
         text="Nächstes Mal"
-        box={{ x: RAND + 0.2, y: 4.27, w: 2, h: 0.3 }}
+        box={{ x: RAND, y: 4.27, w: 2, h: 0.3 }}
         groesse={12}
         farbe={FARBE.dunkel}
         fett
       />
       <Absatz
         text="Zeitschätzungen auf den Trello-Karten, schwierige Tickets früher, Zeitpuffer für die letzten Tage, kurzes Daily"
-        box={{ x: RAND + 0.2, y: 4.53, w: BREITE - 0.4, h: 0.32 }}
+        box={{ x: RAND, y: 4.53, w: BREITE, h: 0.32 }}
         groesse={12}
         farbe={FARBE.dunkel}
       />
@@ -1372,14 +1324,11 @@ const folien = [
         "Als Weiterentwicklung bieten sich das Zwischenspeichern im Browser und eine Hochrechnung für die Zeit ohne ESL-Werte an."
       }
     >
-      <Rechteck
-        box={{ x: RAND, y: 3.95, w: 0.06, h: 0.9 }}
-        farbe={FARBE.gelb}
-      />
+      <Trenner y={3.85} />
       <Absatz
         text="Die Energieagentur Bünzli kann die Zählerdaten ohne Programmierkenntnisse und ohne Installation im Browser auswerten."
-        box={{ x: RAND + 0.25, y: 3.98, w: BREITE - 0.4, h: 0.85 }}
-        groesse={17}
+        box={{ x: RAND, y: 4.0, w: BREITE, h: 0.85 }}
+        groesse={18}
         farbe={FARBE.dunkel}
       />
     </ZweiSpalten>
