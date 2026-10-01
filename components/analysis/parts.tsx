@@ -1,11 +1,12 @@
 "use client";
 
-import { ChartLine, Upload, type LucideIcon } from "lucide-react";
+import { ChartLine, LoaderCircle, Upload, type LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { EASE_OUT } from "@/components/motion-provider";
 import { AnimatedNumber } from "@/components/export/hooks";
+import { useImportStore } from "@/components/import/import-store";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,24 @@ export function NoData({
   page: string;
   article?: "Der" | "Die";
 }) {
+  // after a reload the saved import is still loading, it is not «no data» yet
+  const { restoring } = useImportStore();
+  if (restoring) {
+    return (
+      <section
+        role="status"
+        className="flex flex-1 flex-col items-center justify-center gap-3 rounded-card bg-card px-6 py-16 text-center shadow-card"
+      >
+        <LoaderCircle
+          className="size-5 animate-spin text-soft-foreground motion-reduce:animate-none"
+          aria-hidden
+        />
+        <p className="text-sm text-muted-foreground">
+          Gespeicherte Daten werden geladen …
+        </p>
+      </section>
+    );
+  }
   return (
     <motion.section
       {...rise}

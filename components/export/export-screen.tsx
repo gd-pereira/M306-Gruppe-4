@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { EASE_OUT } from "@/components/motion-provider";
 import { SegmentedTabs } from "@/components/import/table-parts";
 import { toast } from "@/components/ui/toaster";
+import { useImportStore } from "@/components/import/import-store";
 import { useDataStore } from "@/lib/data-store";
 import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
@@ -84,8 +85,11 @@ export function ExportScreen({
   );
   // real meter readings after an import, the demo curve before
   const source = useExportSource();
-  // while the real import runs the screen still has the demo curve, so nothing may leave it
-  const waiting = useDataStore().status === "importing";
+  // while the real import runs (or the saved one loads after a reload) the screen still has
+  // the demo curve, so nothing may leave it
+  const importing = useDataStore().status === "importing";
+  const { restoring } = useImportStore();
+  const waiting = importing || restoring;
   const stats = useMemo(
     () => exportStats(selection, source),
     [selection, source],

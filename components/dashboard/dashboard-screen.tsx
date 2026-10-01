@@ -63,13 +63,17 @@ const importButton = (
 );
 
 export function DashboardScreen() {
-  const { result, lastImport } = useImportStore();
+  const { result, lastImport, restoring } = useImportStore();
   if (!result || !lastImport) {
     return (
       <>
         <PageHeader
           title="Übersicht"
-          description="Noch keine Daten importiert"
+          description={
+            restoring
+              ? "Gespeicherte Daten werden geladen"
+              : "Noch keine Daten importiert"
+          }
           actions={importButton}
         />
         <NoData page="Übersicht" article="Die" />

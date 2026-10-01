@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  cancelDataImport,
   getDataState,
   getRangeData,
   importFiles,
   resetDataStore,
+  restoreDataStore,
   setRange,
 } from "@/lib/data-store";
 import {
@@ -13,11 +15,20 @@ import {
   createParsedFiles,
   type ImportResult,
 } from "@/lib/import";
+import { loadData, saveData } from "@/lib/saved-data";
 import { startImport } from "@/lib/start-import";
 
 // the real startImport needs a web worker, node has none
 vi.mock("@/lib/start-import", () => ({ startImport: vi.fn() }));
 const startImportMock = vi.mocked(startImport);
+
+// node has no IndexedDB either, the saved data is checked through the calls
+vi.mock("@/lib/saved-data", () => ({
+  saveData: vi.fn(async () => {}),
+  loadData: vi.fn(async () => null),
+}));
+const saveDataMock = vi.mocked(saveData);
+const loadDataMock = vi.mocked(loadData);
 
 const FIXTURES = ["sdat-ID742.xml", "sdat-ID735.xml", "esl-2019-03.xml"];
 
@@ -36,6 +47,9 @@ describe("data store", () => {
   beforeEach(() => {
     resetDataStore();
     startImportMock.mockReset();
+    saveDataMock.mockClear();
+    loadDataMock.mockReset();
+    loadDataMock.mockResolvedValue(null);
   });
 
   it("starts empty", () => {
@@ -155,5 +169,88 @@ describe("data store", () => {
     await first;
 
     expect(startImportMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("saved data", () => {
+  beforeEach(() => {
+    resetDataStore();
+    startImportMock.mockReset();
+    saveDataMock.mockClear();
+    loadDataMock.mockReset();
+    loadDataMock.mockResolvedValue(null);
+  });
+
+  it("saves the result of an import", async () => {
+    const result = fixtureResult();
+    startImportMock.mockResolvedValue(result);
+    await importFiles(files);
+
+    expect(saveDataMock).toHaveBeenCalledTimes(1);
+    expect(saveDataMock).toHaveBeenCalledWith("data", {
+      result,
+      lastImport: getDataState().lastImport,
+    });
+  });
+
+  it("saves nothing when the import crashes", async () => {
+    startImportMock.mockRejectedValue(new Error("kaputt"));
+    await importFiles(files);
+    expect(saveDataMock).not.toHaveBeenCalled();
+  });
+
+  it("restores the saved result after a reload", async () => {
+    const result = fixtureResult();
+    const lastImport = { at: 100, fileCount: 3 };
+    loadDataMock.mockResolvedValue({ result, lastImport });
+
+    expect(await restoreDataStore()).toBe(true);
+    const state = getDataState();
+    expect(state).toMatchObject({ status: "ready", result, lastImport });
+    expect(state.range).toEqual(state.bounds);
+    expect(getRangeData("day")).not.toBeNull();
+  });
+
+  it("stays empty when nothing is saved", async () => {
+    expect(await restoreDataStore()).toBe(false);
+    expect(getDataState().status).toBe("empty");
+  });
+
+  it("an import started during the restore wins", async () => {
+    const saved = {
+      result: fixtureResult(),
+      lastImport: { at: 1, fileCount: 3 },
+    };
+    let load: (value: unknown) => void = () => {};
+    loadDataMock.mockReturnValue(new Promise((resolve) => (load = resolve)));
+    const newer = fixtureResult();
+    startImportMock.mockResolvedValue(newer);
+
+    const restoring = restoreDataStore();
+    await importFiles(files);
+    load(saved);
+
+    expect(await restoring).toBe(false);
+    expect(getDataState().result).toBe(newer);
+  });
+
+  it("a cancelled import keeps the data from before and saves nothing", async () => {
+    const before = fixtureResult();
+    startImportMock.mockResolvedValueOnce(before);
+    await importFiles(files);
+    saveDataMock.mockClear();
+
+    let finish: (result: ImportResult) => void = () => {};
+    startImportMock.mockReturnValue(
+      new Promise((resolve) => (finish = resolve)),
+    );
+    const running = importFiles(files);
+    cancelDataImport();
+    expect(getDataState()).toMatchObject({ status: "ready", result: before });
+
+    finish(fixtureResult());
+    await running;
+    expect(getDataState().result).toBe(before);
+    expect(saveDataMock).not.toHaveBeenCalled();
   });
 });

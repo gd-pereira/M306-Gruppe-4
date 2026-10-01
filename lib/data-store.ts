@@ -1,12 +1,13 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { bucketAt, type ZoomLevel } from "@/lib/aggregate";
 import type { ImportResult } from "@/lib/import";
+import { loadData, saveData } from "@/lib/saved-data";
 import { startImport } from "@/lib/start-import";
 import { INTERVAL, pointsInRange } from "@/lib/timeseries";
 import type { DataPoint, Direction } from "@/lib/types";
 
 // the one place where the pages get their data from
-// the data only lives in memory, a reload of the page starts empty again
+// the last import is also kept in IndexedDB (lib/saved-data.ts), restoreDataStore brings it back after a reload
 
 // a time range in unix seconds, from is included and to is not
 export interface TimeRange {
@@ -118,19 +119,16 @@ export async function importFiles(files: File[]): Promise<void> {
     if (id !== latestImport) {
       return;
     }
-    const bounds = dataBounds(result);
-
-    setState({
-      status: "ready",
-      progress: null,
+    const saved: SavedData = {
       result,
-      bounds,
-      range: bounds,
       lastImport: {
         at: Math.floor(Date.now() / 1000),
         fileCount: files.length,
       },
-    });
+    };
+    showSaved(saved);
+    // replaces what was kept before, the page does not wait for it
+    void saveData("data", saved);
   } catch (error) {
     if (id !== latestImport) {
       return;
@@ -143,12 +141,52 @@ export async function importFiles(files: File[]): Promise<void> {
   }
 }
 
+// what is kept in IndexedDB
+interface SavedData {
+  result: ImportResult;
+  lastImport: { at: number; fileCount: number };
+}
+
+function showSaved({ result, lastImport }: SavedData): void {
+  const bounds = dataBounds(result);
+  setState({
+    status: "ready",
+    progress: null,
+    failure: null,
+    result,
+    bounds,
+    range: bounds,
+    lastImport,
+  });
+}
+
+// brings back the data of the last import after a reload, true if there was any
+// does nothing if an import was started in the meantime
+export async function restoreDataStore(): Promise<boolean> {
+  const id = latestImport;
+  const saved = await loadData<SavedData>("data");
+  if (!saved || id !== latestImport || state.status !== "empty") {
+    return false;
+  }
+  showSaved(saved);
+  return true;
+}
+
+// drops the running import, the data from before stays (same as cancel on the import page)
+export function cancelDataImport(): void {
+  if (state.status !== "importing") {
+    return;
+  }
+  latestImport++;
+  setState({ status: state.result ? "ready" : "empty", progress: null });
+}
+
 // sets the time range of the charts, the order of from and to does not matter
 export function setRange(from: number, to: number): void {
   setState({ range: { from: Math.min(from, to), to: Math.max(from, to) } });
 }
 
-// throws away all data, e.g. for a "Daten löschen" button
+// throws away all data in memory, deleteSavedData (import-store) also empties IndexedDB
 // an import that is still running is dropped, its worker just finishes in the background
 export function resetDataStore(): void {
   latestImport++;

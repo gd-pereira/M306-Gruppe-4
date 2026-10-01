@@ -1,5 +1,17 @@
 import { useSyncExternalStore } from "react";
-import { importFiles } from "@/lib/data-store";
+import {
+  cancelDataImport,
+  getDataState,
+  importFiles,
+  resetDataStore,
+  restoreDataStore,
+} from "@/lib/data-store";
+import {
+  clearSavedData,
+  deleteData,
+  loadData,
+  saveData,
+} from "@/lib/saved-data";
 import {
   buildFakeResult,
   isXml,
@@ -17,6 +29,8 @@ export interface ImportState {
   failure: string | null;
   result: FakeImportResult | null; // kept while importing and after a failure
   lastImport: { at: number; fileCount: number } | null;
+  // true while the saved import is loaded after a reload, «Noch keine Daten» waits for it
+  restoring: boolean;
 }
 
 const INITIAL_STATE: ImportState = {
@@ -25,7 +39,19 @@ const INITIAL_STATE: ImportState = {
   failure: null,
   result: null,
   lastImport: null,
+  restoring: false,
 };
+
+// the server never knows what the browser has saved, so the first render waits like a restore
+const SERVER_STATE: ImportState = { ...INITIAL_STATE, restoring: true };
+
+// what is kept in IndexedDB next to the ImportResult of lib/data-store
+interface SavedImport {
+  result: FakeImportResult;
+  lastImport: { at: number; fileCount: number };
+  // real files have their data in lib/data-store, the demo has none
+  real: boolean;
+}
 
 export const NO_XML_FAILURE =
   "In der Auswahl wurden keine .xml-Dateien gefunden. Bitte den Ordner mit den SDAT- und ESL-Dateien wählen.";
@@ -33,7 +59,11 @@ export const NO_XML_FAILURE =
 const TICK_MS = 80;
 const MERGE_MS = 1400;
 
-let state = INITIAL_STATE;
+// in the browser the saved import is loaded right away (see restore below)
+let state: ImportState = {
+  ...INITIAL_STATE,
+  restoring: typeof window !== "undefined",
+};
 const listeners = new Set<() => void>();
 let timers: ReturnType<typeof setTimeout>[] = [];
 
@@ -54,7 +84,7 @@ function getState(): ImportState {
 }
 
 export function useImportStore(): ImportState {
-  return useSyncExternalStore(subscribe, getState, () => INITIAL_STATE);
+  return useSyncExternalStore(subscribe, getState, () => SERVER_STATE);
 }
 
 function clearTimers(): void {
@@ -80,8 +110,16 @@ export function startImport(files: FileInfo[]): void {
   const real = xml.filter(
     (file): file is File => typeof File !== "undefined" && file instanceof File,
   );
-  if (real.length === xml.length) {
-    void importFiles(real);
+  const isReal = real.length === xml.length;
+  const dataBefore = getDataState().result;
+  // resolves once the real import is over (and its data is being saved)
+  let dataDone: Promise<void> = Promise.resolve();
+  if (isReal) {
+    dataDone = importFiles(real);
+  } else {
+    // the demo replaces the data too, real data from before must not come back after a reload
+    resetDataStore();
+    void deleteData("data");
   }
 
   const total = xml.length;
@@ -111,11 +149,24 @@ export function startImport(files: FileInfo[]): void {
     setTimeout(
       () => {
         timers = [];
+        const saved: SavedImport = {
+          result: buildFakeResult(xml),
+          lastImport: { at: Math.floor(Date.now() / 1000), fileCount: total },
+          real: isReal,
+        };
         setState({
           status: "ready",
           progress: null,
-          result: buildFakeResult(xml),
-          lastImport: { at: Math.floor(Date.now() / 1000), fileCount: total },
+          result: saved.result,
+          lastImport: saved.lastImport,
+        });
+        // saved after the data, so a reload never shows this file list with older data.
+        // a failed or cancelled real import keeps the saved import from before
+        void dataDone.then(() => {
+          const dataSaved = !isReal || getDataState().result !== dataBefore;
+          if (dataSaved && state.result === saved.result) {
+            void saveData("import", saved);
+          }
         });
       },
       ticks * TICK_MS + MERGE_MS,
@@ -129,5 +180,38 @@ export function cancelImport(): void {
     return;
   }
   clearTimers();
+  // the real import stops too, otherwise it would replace the data in the background
+  cancelDataImport();
   setState({ status: state.result ? "ready" : "empty", progress: null });
+}
+
+// «Gespeicherte Daten löschen»: empties memory and IndexedDB, the app is back at «Noch keine Daten»
+export async function deleteSavedData(): Promise<void> {
+  clearTimers();
+  resetDataStore();
+  setState({ ...INITIAL_STATE });
+  await clearSavedData();
+}
+
+// loads the saved import after a reload, before «Noch keine Daten» is shown
+// an import that was started in the meantime wins
+async function restore(): Promise<void> {
+  const [saved, hasData] = await Promise.all([
+    loadData<SavedImport>("import"),
+    restoreDataStore(),
+  ]);
+  // a real import whose data did not get saved (reload during the import) is not shown
+  const usable = saved && (!saved.real || hasData);
+  if (usable && state.status === "empty" && !state.result) {
+    setState({
+      status: "ready",
+      result: saved.result,
+      lastImport: saved.lastImport,
+    });
+  }
+  setState({ restoring: false });
+}
+
+if (typeof window !== "undefined") {
+  void restore();
 }
