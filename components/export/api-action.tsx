@@ -131,14 +131,28 @@ function SendStatus({ state }: { state: Extract<ApiState, { kind: "done" }> }) {
       minute: "2-digit",
     });
     return (
-      <p
+      <div
         role="status"
-        className="flex items-center gap-2 rounded-lg bg-success-soft px-2.5 py-1.5 text-xs font-medium text-success-strong"
+        className="flex flex-col gap-2 rounded-lg bg-success-soft px-3 py-2 text-xs font-medium text-success-strong sm:flex-row sm:items-center sm:justify-between"
       >
-        <CircleCheck className="size-3.5 shrink-0" aria-hidden />
-        {`${result.status} ${result.statusText}`.trim()} · {state.sensors}{" "}
-        Sensoren ({formatNumber(state.values)} Werte) gesendet um {time}
-      </p>
+        <div className="flex items-center gap-2">
+          <CircleCheck className="size-3.5 shrink-0" aria-hidden />
+          <span>
+            {`${result.status} ${result.statusText}`.trim()} · {state.sensors}{" "}
+            Sensoren ({formatNumber(state.values)} Werte) gesendet um {time}
+          </span>
+        </div>
+        {host.includes("localhost") || host.includes("127.0.0.1") ? (
+          <a
+            href="/api/zaehlerstaende"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 font-semibold text-foreground underline underline-offset-2 hover:opacity-80"
+          >
+            Empfangene Daten ansehen ↗
+          </a>
+        ) : null}
+      </div>
     );
   }
 
