@@ -24,13 +24,14 @@ import {
   Pager,
   usePeriod,
 } from "./controls";
+import { useAnalysisData } from "./analysis-source";
 import {
   eslReadings,
   METER_SCOPE,
   rangeEnd,
   rangeStart,
   SDAT_END,
-  SDAT_FACTOR,
+  type AnalysisData,
   USAGE_SCOPE,
 } from "./fake-analysis";
 import { MeterChart } from "./meter-chart";
@@ -74,10 +75,14 @@ export function MeterScreen({
 const kwh = (value: number) => formatNumber(value, 1);
 
 // «kWh · ESL 01.04. 50’273.4 → ESL 01.05. 51’392.8 · SDAT April …» when the period runs from reading to reading
-function subtitle(sensor: SensorId, period: Period): string {
+function subtitle(
+  sensor: SensorId,
+  period: Period,
+  data: AnalysisData,
+): string {
   const fallback = `kWh · absoluter Zählerstand ${sensor} · trifft jede ESL-Ablesung, dazwischen nach SDAT-Verlauf verteilt`;
   if (period.level === "all" || period.level === "custom") return fallback;
-  const list = eslReadings(sensor);
+  const list = eslReadings(sensor, data);
   const first = list.find((reading) => reading.day === period.range.from);
   const last = list.find(
     (reading) => reading.day === addDays(period.range.to, 1),
@@ -94,7 +99,7 @@ function subtitle(sensor: SensorId, period: Period): string {
     check?.sdat != null &&
     check.missing.length === 0
   ) {
-    text += ` · SDAT ${check.month} ${kwh(check.sdat)} kWh ÷ ${SDAT_FACTOR.toFixed(2)} = ${kwh(check.eslDiff)} kWh`;
+    text += ` · SDAT ${check.month} ${kwh(check.sdat)} kWh ÷ ${data.ratio.toFixed(2)} = ${kwh(check.eslDiff)} kWh`;
   } else if (
     rangeEnd(period.range) > rangeStart({ from: SDAT_END, to: SDAT_END })
   ) {
@@ -119,6 +124,7 @@ function MeterView({
     intersect(period.range, USAGE_SCOPE.data) ?? USAGE_SCOPE.data;
   const exportHref = `/export?${selectionParams({ format: "csv", sensor, range: exportRange })}`;
   const titled = period.level !== "all" && period.level !== "custom";
+  const data = useAnalysisData();
 
   useEffect(() => {
     const params = new URLSearchParams({ sensor, ...periodParams(period) });
@@ -202,7 +208,7 @@ function MeterView({
                 />
               </h2>
               <Swap
-                value={subtitle(sensor, period)}
+                value={subtitle(sensor, period, data)}
                 className="text-xs text-muted-foreground"
               />
             </div>

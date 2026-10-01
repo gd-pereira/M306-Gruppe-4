@@ -8,6 +8,7 @@ import { yTicks } from "@/components/export/fake-export";
 import { formatNumber } from "@/lib/format";
 import { bucketTitle, xTicksFor } from "./chart-axes";
 import type { Drill } from "./controls";
+import { useAnalysisData } from "./analysis-source";
 import {
   rangeEnd,
   rangeStart,
@@ -67,14 +68,15 @@ export function ConsumptionChart({
 }) {
   const { range } = period;
   const resolution = resolutionOf(period);
+  const data = useAnalysisData();
   const buckets = useMemo(
-    () => usageBuckets(range, resolution),
-    [range, resolution],
+    () => usageBuckets(range, resolution, data),
+    [range, resolution, data],
   );
   // with the red dots the gap days need no shaded region
   const regions = useMemo(
-    () => (markGaps ? [] : usageRegions(range)),
-    [range, markGaps],
+    () => (markGaps ? [] : usageRegions(range, data)),
+    [range, markGaps, data],
   );
   const xTicks = useMemo(
     () => xTicksFor(range, resolution),

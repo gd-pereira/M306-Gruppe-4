@@ -15,6 +15,7 @@ import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { shortRange } from "./chart-axes";
+import { useAnalysisData } from "./analysis-source";
 import {
   eslReadings,
   FIRST_ESL,
@@ -24,7 +25,6 @@ import {
   rangeEnd,
   rangeStart,
   SDAT_END,
-  SDAT_FACTOR,
   sourceSegments,
   type SourceKind,
 } from "./fake-analysis";
@@ -77,9 +77,10 @@ export function SourcesCard({
 }) {
   const { range } = period;
   const [barRef, { width }] = useElementSize<HTMLDivElement>();
+  const data = useAnalysisData();
   const segments = useMemo(() => sourceSegments(range), [range]);
-  const gaps = useMemo(() => gapsIn(range), [range]);
-  const esl = eslReadings(sensor);
+  const gaps = useMemo(() => gapsIn(range, data), [range, data]);
+  const esl = eslReadings(sensor, data);
   const long = daysBetween(range.from, range.to) > 400;
   const t0 = rangeStart(range);
   const t1 = rangeEnd(range);
@@ -88,7 +89,7 @@ export function SourcesCard({
     width: (rangeEnd({ from, to }) - rangeStart({ from, to })) / (t1 - t0),
   });
 
-  const marks = useMemo(() => gapMarks(range), [range]);
+  const marks = useMemo(() => gapMarks(range, data), [range, data]);
 
   const boundaries = [
     ...segments.map((segment) => segment.range.from),
@@ -151,7 +152,7 @@ export function SourcesCard({
     items.push({
       swatch: "border border-border-strong bg-[#ffe7a8]",
       title: "Zurückgerechnet · 2018",
-      text: `Ab der ersten ESL-Ablesung ${formatNumber(esl[0].value, 1)} kWh (${formatDay(FIRST_ESL)}) rückwärts mit SDAT ÷ ${SDAT_FACTOR.toFixed(2)}`,
+      text: `Ab der ersten ESL-Ablesung ${formatNumber(esl[0].value, 1)} kWh (${formatDay(FIRST_ESL)}) rückwärts mit SDAT ÷ ${data.ratio.toFixed(2)}`,
     });
   }
   const measured = has("measured");

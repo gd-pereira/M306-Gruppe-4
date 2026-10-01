@@ -56,8 +56,9 @@ describe("viewFromLocation", () => {
       label: "ID742.csv",
       href: "/export?sensor=ID742&von=2018-01-01&bis=2021-09-06",
     });
+    // json has both sensors in one file, named like the download
     expect(viewFromLocation("/export", "sensor=ID735&format=json")?.label).toBe(
-      "ID735.json",
+      "zaehlerstaende.json",
     );
     expect(viewFromLocation("/export", "modus=api")?.label).toBe(
       "An API senden",
