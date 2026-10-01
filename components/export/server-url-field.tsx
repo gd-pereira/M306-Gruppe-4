@@ -38,7 +38,7 @@ export function ServerUrlField({
                 : "http://localhost:3000";
             onChange(`${origin}/api/zaehlerstaende`);
           }}
-          className="text-xs font-medium text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="text-xs font-medium text-brand underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           Demo-Server verwenden
         </button>

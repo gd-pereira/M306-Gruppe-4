@@ -27,8 +27,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   // sidebar is only visible when there are data (or temporarily during initial restore if onboarded)
   const showSidebar = hasData || (restoring && onboarded === true);
   // the bar belongs to the empty import screen only, it collapses as soon as an import starts
-  const showBar =
-    !hasData && pathname === "/import" && status !== "importing";
+  const showBar = !hasData && pathname === "/import" && status !== "importing";
 
   const router = useRouter();
   const reduceMotion = useReducedMotion();
@@ -120,7 +119,7 @@ function FullscreenBar({ play, pending }: { play: boolean; pending: boolean }) {
       <Link
         href="/import"
         aria-label="Zum Import"
-        className="rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="rounded-md transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <FluxLogo className="h-9 w-auto text-foreground" />
       </Link>

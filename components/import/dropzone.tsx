@@ -140,75 +140,75 @@ export function Dropzone({
               : "border-[#ece6d6] bg-[radial-gradient(ellipse_at_center,#fff8e6_0%,#fffcf4_55%,#fffdf8_100%)]",
           )}
         >
-        <DropDecor dragging={dragging} />
-        <motion.div
-          animate={dragging ? { scale: 1.08, y: -4 } : { scale: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 380, damping: 22 }}
-          className={cn(
-            "mb-1 flex size-[60px] items-center justify-center rounded-full shadow-[0_0_0_10px_rgb(255_182_3/0.07),0_10px_36px_-4px_rgb(255_182_3/0.45)] transition-colors duration-200",
-            dragging
-              ? "bg-brand text-brand-foreground"
-              : "bg-card text-foreground",
-          )}
-        >
-          <motion.span
-            animate={dragging ? { y: [0, -3, 0] } : { y: 0 }}
-            transition={
+          <DropDecor dragging={dragging} />
+          <motion.div
+            animate={dragging ? { scale: 1.08, y: -4 } : { scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 380, damping: 22 }}
+            className={cn(
+              "mb-1 flex size-[60px] items-center justify-center rounded-full shadow-[0_0_0_10px_rgb(255_182_3/0.07),0_10px_36px_-4px_rgb(255_182_3/0.45)] transition-colors duration-200",
               dragging
-                ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
-                : { duration: 0.2 }
-            }
+                ? "bg-brand text-brand-foreground"
+                : "bg-card text-foreground",
+            )}
           >
-            <Upload className="size-[22px]" aria-hidden />
-          </motion.span>
-        </motion.div>
-
-        <div className="flex flex-col items-center gap-1">
-          <SwapText
-            id={dragging ? "drop" : "idle"}
-            className="text-lg font-semibold"
-          >
-            {dragging
-              ? "Dateien hier loslassen"
-              : "Dateien oder Ordner hierher ziehen"}
-          </SwapText>
-          <SwapText
-            id={dragging ? "drop-hint" : "idle-hint"}
-            className="text-sm text-muted-foreground"
-          >
-            {dragging
-              ? "Nur .xml-Dateien werden eingelesen, alles andere wird übersprungen"
-              : "SDAT- und ESL-Dateien (.xml) · mehrere Dateien oder ein ganzer Ordner"}
-          </SwapText>
-        </div>
-
-        <div
-          className={cn(
-            "flex flex-col items-center gap-3 transition-opacity duration-200",
-            dragging && "pointer-events-none opacity-0",
-          )}
-        >
-          <div className="flex items-center gap-2.5 pt-1">
-            <Button
-              variant="brand"
-              size="lg"
-              onClick={onPickFiles}
-              className="shadow-[0_6px_18px_-6px_rgb(255_182_3/0.75)] active:translate-y-px"
+            <motion.span
+              animate={dragging ? { y: [0, -3, 0] } : { y: 0 }}
+              transition={
+                dragging
+                  ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
+                  : { duration: 0.2 }
+              }
             >
-              <FileIcon />
-              Dateien auswählen
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={onPickFolder}
-              className="bg-card shadow-card active:translate-y-px"
+              <Upload className="size-[22px]" aria-hidden />
+            </motion.span>
+          </motion.div>
+
+          <div className="flex flex-col items-center gap-1">
+            <SwapText
+              id={dragging ? "drop" : "idle"}
+              className="text-lg font-semibold"
             >
-              <Folder />
-              Ordner auswählen
-            </Button>
+              {dragging
+                ? "Dateien hier loslassen"
+                : "Dateien oder Ordner hierher ziehen"}
+            </SwapText>
+            <SwapText
+              id={dragging ? "drop-hint" : "idle-hint"}
+              className="text-sm text-muted-foreground"
+            >
+              {dragging
+                ? "Nur .xml-Dateien werden eingelesen, alles andere wird übersprungen"
+                : "SDAT- und ESL-Dateien (.xml) · mehrere Dateien oder ein ganzer Ordner"}
+            </SwapText>
           </div>
-        </div>
+
+          <div
+            className={cn(
+              "flex flex-col items-center gap-3 transition-opacity duration-200",
+              dragging && "pointer-events-none opacity-0",
+            )}
+          >
+            <div className="flex items-center gap-2.5 pt-1">
+              <Button
+                variant="brand"
+                size="lg"
+                onClick={onPickFiles}
+                className="shadow-[0_6px_18px_-6px_rgb(255_182_3/0.75)] active:translate-y-px"
+              >
+                <FileIcon />
+                Dateien auswählen
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={onPickFolder}
+                className="bg-card shadow-card active:translate-y-px"
+              >
+                <Folder />
+                Ordner auswählen
+              </Button>
+            </div>
+          </div>
         </div>
       </motion.section>
 

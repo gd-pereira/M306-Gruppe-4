@@ -29,7 +29,8 @@ export async function POST(request: Request) {
     if (!Array.isArray(body)) {
       return NextResponse.json(
         {
-          error: "Ungültiges Format: Der Body muss ein JSON-Array von Sensoren sein.",
+          error:
+            "Ungültiges Format: Der Body muss ein JSON-Array von Sensoren sein.",
           detail: "Erwartet wird [{ sensorId: string, data: [{ ts, value }] }]",
         },
         { status: 400 },

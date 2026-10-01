@@ -114,7 +114,7 @@ function OpenSidebar({
           type="button"
           onClick={toggleSidebar}
           aria-label="Sidebar einklappen"
-          className="flex items-center rounded-md transition-opacity hover:opacity-80 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          className="flex items-center rounded-md transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none active:translate-y-px"
         >
           <FluxLogo className="h-7 w-auto text-sidebar-accent-foreground" />
         </button>
@@ -463,7 +463,7 @@ function CollapsedSidebar({
         type="button"
         onClick={toggleSidebar}
         aria-label="Sidebar ausklappen"
-        className="flex items-center rounded-md transition-opacity hover:opacity-80 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        className="flex items-center rounded-md transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none active:translate-y-px"
       >
         <FluxMark className="h-7 w-[30.4px] shrink-0 text-sidebar-accent-foreground" />
       </button>

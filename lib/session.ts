@@ -11,11 +11,19 @@ export async function sessionToken(password: string): Promise<string> {
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(SESSION_COOKIE));
-  return Array.from(new Uint8Array(signature), (b) => b.toString(16).padStart(2, "0")).join("");
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(SESSION_COOKIE),
+  );
+  return Array.from(new Uint8Array(signature), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
-export async function isValidSession(cookie: string | undefined): Promise<boolean> {
+export async function isValidSession(
+  cookie: string | undefined,
+): Promise<boolean> {
   const password = process.env.ADMIN_PASSWORD;
   if (!password || !cookie) return false;
   return cookie === (await sessionToken(password));

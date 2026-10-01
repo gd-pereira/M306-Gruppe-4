@@ -11,27 +11,28 @@ Built by M306 Gruppe 4 during the BZZ project week (28.09. to 02.10.2026).
 
 ## Status
 
-As of 30.09.2026 the complete data pipeline in `lib/` is implemented and tested, including a web worker for importing thousands of files. All pages are built, but they still show demo data from the `fake-*.ts` files in `components/`. The next step is to connect them to the data store in `lib/data-store.ts`.
+As of 01.10.2026 all features are done and every page reads the imported data from the data store in `lib/data-store.ts`.
 
-| Feature                                        | Status                                       |
-| ---------------------------------------------- | -------------------------------------------- |
-| Read SDAT files                                | Done, `lib/parse-sdat.ts`                    |
-| Read ESL files                                 | Done, `lib/parse-esl.ts`                     |
-| Remove duplicates across files                 | Done, `lib/timeseries.ts`                    |
-| Find gaps                                      | Done, `lib/timeseries.ts`                    |
-| Convert consumption to absolute meter readings | Done, `lib/meter.ts`                         |
-| Cross-check SDAT against ESL                   | Done, `lib/meter.ts`                         |
-| Aggregate to zoom levels (15 min to month)     | Done, `lib/aggregate.ts`                     |
-| Import many files in a web worker              | Done, `lib/import.ts`, `lib/start-import.ts` |
-| Data store for the pages                       | Done, `lib/data-store.ts`                    |
-| Login with password                            | See [Login](#login)               |
-| Dashboard                                      | Built, demo data                             |
-| Import page (file picker, progress, errors)    | Built, demo data                             |
-| Consumption chart                              | Built, demo data                             |
-| Meter reading chart                            | Built, demo data                             |
-| CSV export                                     | Page built, export logic open                |
-| Save as JSON file (nice to have)               | Page built, export logic open                |
-| HTTP POST of JSON to a server (nice to have)   | Page built, export logic open                |
+| Feature                                        | Status                                        |
+| ---------------------------------------------- | --------------------------------------------- |
+| Read SDAT files                                | Done, `lib/parse-sdat.ts`                     |
+| Read ESL files                                 | Done, `lib/parse-esl.ts`                      |
+| Remove duplicates across files                 | Done, `lib/timeseries.ts`                     |
+| Find gaps                                      | Done, `lib/timeseries.ts`                     |
+| Convert consumption to absolute meter readings | Done, `lib/meter.ts`                          |
+| Cross-check SDAT against ESL                   | Done, `lib/meter.ts`                          |
+| Aggregate to zoom levels (15 min to month)     | Done, `lib/aggregate.ts`                      |
+| Import many files in a web worker              | Done, `lib/import.ts`, `lib/start-import.ts`  |
+| Data store for the pages                       | Done, `lib/data-store.ts`                     |
+| Keep the import after a reload (IndexedDB)     | Done, `lib/saved-data.ts`                     |
+| Login with password                            | Done, see [Login](#login)                     |
+| Dashboard                                      | Done, `components/dashboard/`                 |
+| Import page (file picker, progress, errors)    | Done, `components/import/`                    |
+| Consumption chart with drill-down              | Done, `components/analysis/`                  |
+| Meter reading chart                            | Done, `components/analysis/`                  |
+| CSV export                                     | Done, `lib/export.ts`, `components/export/`   |
+| Save as JSON file (nice to have)               | Done, `lib/export.ts`                         |
+| HTTP POST of JSON to a server (nice to have)   | Done, test server in `app/api/zaehlerstaende` |
 
 ## Tech stack
 
@@ -197,7 +198,7 @@ The code uses English names, the user interface is in German. The project descri
 
 ## Data store (for the UI)
 
-`lib/data-store.ts` is the interface between the data logic and the pages. Pages only talk to the store, never to the parsers or the worker directly. The data only lives in memory: client side navigation keeps it, a page reload starts empty again. Please ask the data logic team before changing the store.
+`lib/data-store.ts` is the interface between the data logic and the pages. Pages only talk to the store, never to the parsers or the worker directly. After an import the result is also saved in IndexedDB (`lib/saved-data.ts`), so a page reload restores it. «Gespeicherte Daten löschen» on the import page removes it again. Please ask the data logic team before changing the store.
 
 All times are Unix seconds (UTC), ranges include `from` and exclude `to`. For display use `new Date(ts * 1000)`.
 
@@ -297,13 +298,14 @@ export function ConsumptionChart() {
 }
 ```
 
-## Export formats (planned)
+## Export formats
 
-**CSV**: one file per sensor named after the sensor ID, e.g. `ID742.csv`. Unix timestamp in UTC, absolute meter reading, 15 minute resolution.
+**CSV**: one file per sensor named after the sensor ID, e.g. `ID742.csv`. Unix timestamp in UTC (end of the 15 minute interval), absolute meter reading in kWh. The first line `sep=,` tells Excel on Swiss and German Windows that the separator is a comma.
 
 ```csv
-timestamp, value
-1503495302, 82.03
+sep=,
+timestamp,value
+1514762100,3569.9
 ```
 
 **JSON**: one entry per sensor, `ts` is a string (Unix UTC), `value` is the absolute meter reading.

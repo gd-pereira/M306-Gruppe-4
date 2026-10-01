@@ -7,7 +7,10 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest();
 export async function POST(request: Request) {
   const expected = process.env.ADMIN_PASSWORD;
   if (!expected) {
-    return NextResponse.json({ error: "ADMIN_PASSWORD is not configured" }, { status: 500 });
+    return NextResponse.json(
+      { error: "ADMIN_PASSWORD is not configured" },
+      { status: 500 },
+    );
   }
 
   const body = await request.json().catch(() => null);

@@ -181,7 +181,9 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
-  const [wrong, setWrong] = useState(false);
+  // "unavailable": the server could not check the password, e.g. ADMIN_PASSWORD missing or offline
+  const [error, setError] = useState<"wrong" | "unavailable" | null>(null);
+  const wrong = error !== null;
 
   // the login doubles as lock screen, reaching it always locks the app
   useEffect(() => {
@@ -197,15 +199,15 @@ function LoginForm() {
     }
 
     setStatus("checking");
-    const ok = await fetch("/api/login", {
+    const responseStatus = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),
     })
-      .then((response) => response.ok)
-      .catch(() => false);
-    if (ok) {
-      setWrong(false);
+      .then((response) => response.status)
+      .catch(() => 0);
+    if (responseStatus === 200) {
+      setError(null);
       setStatus("open");
       // prefetching only now, before the session the proxy would answer with the login
       router.prefetch("/");
@@ -214,7 +216,7 @@ function LoginForm() {
     }
 
     setStatus("idle");
-    setWrong(true);
+    setError(responseStatus === 401 ? "wrong" : "unavailable");
     input.current?.focus();
     if (!reduceMotion) {
       animate(field.current, { x: [0, -6, 6, -4, 4, 0] }, { duration: 0.4 });
@@ -259,7 +261,7 @@ function LoginForm() {
             value={password}
             onChange={(event) => {
               setPassword(event.target.value);
-              setWrong(false);
+              setError(null);
             }}
             aria-invalid={wrong}
             aria-describedby={wrong ? "password-error" : undefined}
@@ -309,7 +311,9 @@ function LoginForm() {
                 className="flex items-center gap-1.5 pt-2 text-[13px] leading-[17px] font-medium text-danger-strong"
               >
                 <CircleAlert className="size-3.5 text-danger" aria-hidden />
-                Falsches Passwort. Bitte erneut versuchen.
+                {error === "wrong"
+                  ? "Falsches Passwort. Bitte erneut versuchen."
+                  : "Anmelden ist gerade nicht möglich. Bitte später erneut versuchen."}
               </p>
             </motion.div>
           )}
