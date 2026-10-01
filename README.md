@@ -24,7 +24,7 @@ As of 30.09.2026 the complete data pipeline in `lib/` is implemented and tested,
 | Aggregate to zoom levels (15 min to month)     | Done, `lib/aggregate.ts`                     |
 | Import many files in a web worker              | Done, `lib/import.ts`, `lib/start-import.ts` |
 | Data store for the pages                       | Done, `lib/data-store.ts`                    |
-| Login with password                            | Demo only, see [Login](#login)               |
+| Login with password                            | See [Login](#login)               |
 | Dashboard                                      | Built, demo data                             |
 | Import page (file picker, progress, errors)    | Built, demo data                             |
 | Consumption chart                              | Built, demo data                             |
@@ -58,11 +58,11 @@ npm install
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000) and log in with the demo password `flux`. Sample files to import are in `data/sdat/` and `data/esl/`.
+Then open [http://localhost:3000](http://localhost:3000) and log in with the `ADMIN_PASSWORD` from your `.env.local` (copy `.env.example` and set a long random value). Sample files to import are in `data/sdat/` and `data/esl/`.
 
 ### Login
 
-`proxy.ts` sends every visitor without the session cookie `flux-session` to `/login`. For now the password is checked in the browser against the demo password in `components/login/fake-auth.ts`, and `lib/session.ts` sets the cookie. There is no environment variable yet. The planned version checks the password on the server against an environment variable and sets an httpOnly cookie, so the real password never ends up in the browser.
+`proxy.ts` sends every visitor without a valid session cookie `flux-session` to `/login`. `app/api/login/route.ts` compares the submitted password on the server with the environment variable `ADMIN_PASSWORD` and answers with an httpOnly cookie holding an HMAC keyed with the password, so the password never ends up in the browser and changing it logs everyone out. Set `ADMIN_PASSWORD` in `.env.local` (and in the Vercel project settings); without it nobody can log in.
 
 ### Scripts
 
@@ -93,7 +93,7 @@ components/
   charts/                bklit chart components (line chart, axes, tooltip, ...)
   ui/                    shadcn components
 lib/
-  session.ts             session cookie (demo, see Login)
+  session.ts             session cookie name and HMAC token (see Login)
   format.ts              number and date formatting for the UI
   utils.ts               cn() for Tailwind classes
   types.ts               shared types and the sensor IDs

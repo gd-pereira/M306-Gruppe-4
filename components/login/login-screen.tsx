@@ -17,9 +17,7 @@ import {
 } from "react";
 import { FluxLogo } from "@/components/brand/flux-logo";
 import { EASE_OUT, MotionProvider } from "@/components/motion-provider";
-import { endSession, startSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
-import { checkPassword } from "./fake-auth";
 import { SamplePlot } from "./sample-plot";
 
 const FEATURES = [
@@ -187,7 +185,7 @@ function LoginForm() {
 
   // the login doubles as lock screen, reaching it always locks the app
   useEffect(() => {
-    endSession();
+    void fetch("/api/login", { method: "DELETE" });
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -199,11 +197,16 @@ function LoginForm() {
     }
 
     setStatus("checking");
-    const ok = await checkPassword(password);
+    const ok = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    })
+      .then((response) => response.ok)
+      .catch(() => false);
     if (ok) {
       setWrong(false);
       setStatus("open");
-      startSession();
       // prefetching only now, before the session the proxy would answer with the login
       router.prefetch("/");
       setTimeout(() => router.replace("/"), 450);

@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE } from "@/lib/session";
+import { isValidSession, SESSION_COOKIE } from "@/lib/session";
 
 // every app page needs an unlocked session, otherwise the login comes first
-export function proxy(request: NextRequest) {
-  if (request.cookies.has(SESSION_COOKIE)) {
+export async function proxy(request: NextRequest) {
+  if (await isValidSession(request.cookies.get(SESSION_COOKIE)?.value)) {
     return NextResponse.next();
   }
   return NextResponse.redirect(new URL("/login", request.url));
