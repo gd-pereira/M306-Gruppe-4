@@ -21,6 +21,7 @@ import {
 } from "@/components/export/fake-export";
 import { cn } from "@/lib/utils";
 import { localParts } from "./chart-axes";
+import { useAnalysisData } from "./analysis-source";
 import {
   rangeEnd,
   rangeStart,
@@ -87,7 +88,11 @@ export function Brush({
 }) {
   const [ref, { width }] = useElementSize<HTMLDivElement>();
   const { data, all } = USAGE_SCOPE;
-  const months = useMemo(() => usageBuckets(all, "month"), [all]);
+  const analysis = useAnalysisData();
+  const months = useMemo(
+    () => usageBuckets(all, "month", analysis),
+    [all, analysis],
+  );
   const t0 = rangeStart(all);
   const t1 = rangeEnd(all);
   const totalDays = daysBetween(all.from, all.to) + 1;
@@ -104,8 +109,8 @@ export function Brush({
   const full = sameRange(current, data);
   const shown = draft ?? current;
   const draftTotal = useMemo(
-    () => (draft ? usageTotals(draft).consumption : 0),
-    [draft],
+    () => (draft ? usageTotals(draft, analysis).consumption : 0),
+    [draft, analysis],
   );
 
   const top = Math.max(1, ...months.map((m) => m.consumption ?? 0));

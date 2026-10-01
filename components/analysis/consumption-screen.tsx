@@ -15,6 +15,7 @@ import {
   Pager,
   usePeriod,
 } from "./controls";
+import { useAnalysisData } from "./analysis-source";
 import { USAGE_SCOPE, usageTotals } from "./fake-analysis";
 import {
   Badge,
@@ -71,7 +72,11 @@ function ConsumptionView({ initial }: { initial: Period }) {
     consumption: true,
     feedIn: true,
   });
-  const totals = useMemo(() => usageTotals(period.range), [period.range]);
+  const data = useAnalysisData();
+  const totals = useMemo(
+    () => usageTotals(period.range, data),
+    [period.range, data],
+  );
   const resolution = resolutionOf(period);
   const net = totals.consumption - totals.feedIn;
   const withYear =

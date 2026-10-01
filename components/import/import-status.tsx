@@ -1,9 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, CircleAlert, TriangleAlert } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  CircleAlert,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { motion } from "motion/react";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -11,9 +17,12 @@ import { cn } from "@/lib/utils";
 export function ImportStatus({
   total,
   errors,
+  onDelete,
 }: {
   total: number;
   errors: number;
+  // «Gespeicherte Daten löschen», asks first
+  onDelete: () => void;
 }) {
   const read = total - errors;
   const Icon = errors > 0 ? TriangleAlert : Check;
@@ -50,6 +59,10 @@ export function ImportStatus({
             : `${formatNumber(read)} von ${formatNumber(total)} Dateien gelesen, die Daten sind bereit.`}
         </p>
       </div>
+      <Button variant="outline" size="lg" onClick={onDelete}>
+        <Trash2 />
+        Gespeicherte Daten löschen
+      </Button>
       <Link
         href="/dashboard"
         className={cn(

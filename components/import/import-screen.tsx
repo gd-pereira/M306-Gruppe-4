@@ -12,7 +12,13 @@ import { IgnoredFilesDialog } from "./ignored-files-dialog";
 import { ImportProgress } from "./import-progress";
 import { ImportSkeleton } from "./import-skeleton";
 import { ImportFailedAlert, ImportStatus } from "./import-status";
-import { cancelImport, startImport, useImportStore } from "./import-store";
+import { DeleteDataDialog } from "./delete-data-dialog";
+import {
+  cancelImport,
+  deleteSavedData,
+  startImport,
+  useImportStore,
+} from "./import-store";
 import { ImportSummary } from "./import-summary";
 import { ReplaceDataDialog } from "./replace-data-dialog";
 import { useFileDrop } from "./use-file-drop";
@@ -24,12 +30,14 @@ const fade = {
 };
 
 export function ImportScreen() {
-  const { status, progress, failure, result, lastImport } = useImportStore();
+  const { status, progress, failure, result, lastImport, restoring } =
+    useImportStore();
   const importing = status === "importing";
 
   // files waiting for "Ersetzen und importieren"
   const [pending, setPending] = useState<FileInfo[] | null>(null);
   const [ignoredOpen, setIgnoredOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   // which result the tab belongs to, a new import starts on its own default tab
   const [tabState, setTabState] = useState<{
     result: typeof result;
@@ -76,7 +84,16 @@ export function ImportScreen() {
       </AnimatePresence>
 
       <AnimatePresence mode="wait" initial={false}>
-        {!result && !importing ? (
+        {restoring && !result && !importing ? (
+          // after a reload the saved import is still loading, the dropzone would flash
+          <motion.div
+            key="restoring"
+            {...fade}
+            className="flex flex-1 flex-col gap-5"
+          >
+            <ImportSkeleton />
+          </motion.div>
+        ) : !result && !importing ? (
           <motion.div
             key="empty"
             {...fade}
@@ -132,6 +149,7 @@ export function ImportScreen() {
                     <ImportStatus
                       total={lastImport.fileCount}
                       errors={errorCount}
+                      onDelete={() => setDeleteOpen(true)}
                     />
                   </motion.div>
                   <motion.div
@@ -162,6 +180,16 @@ export function ImportScreen() {
         onConfirm={() => {
           if (pending) startImport(pending);
           setPending(null);
+        }}
+      />
+      <DeleteDataDialog
+        open={deleteOpen}
+        fileCount={lastImport?.fileCount ?? 0}
+        period={period}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={() => {
+          setDeleteOpen(false);
+          void deleteSavedData();
         }}
       />
       <IgnoredFilesDialog

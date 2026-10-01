@@ -3,6 +3,7 @@ import {
   DATA_END,
   DATA_START,
   dayKey,
+  dayOf,
   daysBetween,
   dayStart,
   formatDay,
@@ -14,11 +15,23 @@ import {
   type DayKey,
   type DayRange,
 } from "@/components/export/fake-export";
-import type { SensorId } from "@/lib/types";
+import type { ImportResult } from "@/lib/import";
+import type { Comparison } from "@/lib/meter";
+import { roundKwh } from "@/lib/math";
+import {
+  SENSOR_IDS,
+  type DataPoint,
+  type Direction,
+  type SensorId,
+} from "@/lib/types";
 import { intersect, MONTH_NAMES, type Resolution, type Scope } from "./period";
 
-// stand-in for the ImportResult (T3-2/T3-11) on the verbrauch and zählerstand pages,
-// built from the same fake meter readings as the export so all pages show the same numbers
+// the data of the verbrauch and zählerstand pages: sdat usage, meter readings, esl readings
+// and gaps on one 15 min grid from DATA_START to DATA_END.
+// after an import it comes from the ImportResult (realAnalysisData), before that from the
+// same made-up readings as the export (fakeAnalysisData). every function takes the data as
+// its last parameter, the pages get it from useAnalysisData (analysis-source.ts).
+// no store or react imports here, the pages (server components) read the scopes
 
 // in the test data sdat is always 3x the esl difference (confirmed by the client)
 export const SDAT_FACTOR = 3;
@@ -43,6 +56,285 @@ export function rangeEnd(range: DayRange): number {
   return dayStart(addDays(range.to, 1));
 }
 
+export interface MonthCheck {
+  // «Februar»
+  month: string;
+  eslDiff: number;
+  // null after the end of sdat
+  sdat: number | null;
+  missing: DayRange[];
+}
+
+export interface EslReading {
+  day: DayKey;
+  ts: number;
+  value: number;
+  // comparison with the reading before, null for the first one
+  check: MonthCheck | null;
+}
+
+export interface AnalysisData {
+  // ts of the first interval and number of 15 min intervals up to the end of DATA_END
+  start: number;
+  count: number;
+  // 1 where the interval has no sdat value
+  gap: Uint8Array;
+  // sdat value of every interval in kWh, 0 in the gaps
+  usage: Record<SensorId, Float64Array>;
+  // prefix[i] = sum of the first i values, the sum of a..b is prefix[b] - prefix[a]
+  prefix: Record<SensorId, Float64Array>;
+  // meter reading at the start of every interval (count + 1 values),
+  // gaps are drawn as a straight line between the readings around them
+  meter: Record<SensorId, Float64Array>;
+  esl: Record<SensorId, EslReading[]>;
+  // the gaps as whole days
+  gaps: DayRange[];
+  // sdat ÷ esl, used to calculate 2018 backwards (3.00 in the test data)
+  ratio: number;
+}
+
+const DIRECTIONS: Direction[] = ["consumption", "feedIn"];
+
+function prefixOf(usage: Float64Array): Float64Array {
+  const prefix = new Float64Array(usage.length + 1);
+  for (let i = 0; i < usage.length; i++) prefix[i + 1] = prefix[i] + usage[i];
+  return prefix;
+}
+
+// replaces every NaN with a straight line between the known values around it
+function bridge(values: Float64Array): void {
+  let k = 0;
+  while (k < values.length) {
+    if (!Number.isNaN(values[k])) {
+      k++;
+      continue;
+    }
+    const a = k - 1;
+    while (k < values.length && Number.isNaN(values[k])) k++;
+    const from = a >= 0 ? values[a] : values[k];
+    const to = k < values.length ? values[k] : from;
+    for (let j = a + 1; j < k; j++) {
+      values[j] = from + ((to - from) * (j - a)) / (k - a);
+    }
+  }
+}
+
+function monthCheck(
+  previous: { day: DayKey; value: number },
+  day: DayKey,
+  value: number,
+  sdat: number | null,
+  gaps: DayRange[],
+): MonthCheck {
+  const month = { from: previous.day, to: addDays(day, -1) };
+  return {
+    month: MONTH_NAMES[Number(previous.day.slice(5, 7)) - 1],
+    eslDiff: value - previous.value,
+    sdat,
+    missing: gaps.filter((gap) => intersect(gap, month)),
+  };
+}
+
+function monthKey(year: number, month: number): DayKey {
+  return dayKey(year, month, 1);
+}
+
+// one made-up esl reading on the first of every month. after the end of sdat the readings
+// grow by the usage of the same month one year earlier
+function fakeEsl(
+  raw: Float64Array,
+  values: Float64Array,
+  start: number,
+  count: number,
+): EslReading[] {
+  const lastTs = start + count * INTERVAL;
+  const known = new Map<DayKey, number>();
+  const valueOn = (day: DayKey): number => {
+    const ts = dayStart(day);
+    if (ts <= lastTs) return values[(ts - start) / INTERVAL];
+    const stored = known.get(day);
+    if (stored !== undefined) return stored;
+    const [y, m] = day.split("-").map(Number);
+    const value =
+      valueOn(monthKey(y, m - 2)) +
+      valueOn(monthKey(y - 1, m - 1)) -
+      valueOn(monthKey(y - 1, m - 2));
+    known.set(day, value);
+    return value;
+  };
+
+  const list: EslReading[] = [];
+  const [firstYear, firstMonth] = FIRST_ESL.split("-").map(Number);
+  for (let i = 0; ; i++) {
+    const day = monthKey(firstYear, firstMonth - 1 + i);
+    if (day > LAST_ESL) break;
+    const ts = dayStart(day);
+    const value = valueOn(day);
+    const previous = list[list.length - 1];
+    let check: MonthCheck | null = null;
+    if (previous) {
+      const month = { from: previous.day, to: addDays(day, -1) };
+      let sdat: number | null = null;
+      if (ts <= lastTs) {
+        // the sdat sum leaves out the missing days, the esl difference still counts them
+        let gapUsage = 0;
+        for (const gap of GAPS.filter((gap) => intersect(gap, month))) {
+          const a = (dayStart(gap.from) - start) / INTERVAL;
+          const b = (dayStart(addDays(gap.to, 1)) - start) / INTERVAL;
+          gapUsage += raw[b - 1] - raw[a - 1];
+        }
+        sdat = (value - previous.value - gapUsage) * SDAT_FACTOR;
+      }
+      check = monthCheck(previous, day, value, sdat, GAPS);
+    }
+    list.push({ day, ts, value, check });
+  }
+  return list;
+}
+
+let fakeData: AnalysisData | null = null;
+
+// the made-up readings of the export, sdat = 3x the meter difference like in the test data
+export function fakeAnalysisData(): AnalysisData {
+  if (fakeData) return fakeData;
+  const { start, count, gap } = getGrid();
+  const data: AnalysisData = {
+    start,
+    count,
+    gap,
+    usage: {} as AnalysisData["usage"],
+    prefix: {} as AnalysisData["prefix"],
+    meter: {} as AnalysisData["meter"],
+    esl: {} as AnalysisData["esl"],
+    gaps: GAPS,
+    ratio: SDAT_FACTOR,
+  };
+  for (const direction of DIRECTIONS) {
+    const sensor = SENSOR_IDS[direction];
+    const readings = getReadings(sensor);
+    const usage = new Float64Array(count);
+    for (let i = 1; i < count; i++) {
+      if (!gap[i]) usage[i] = (readings[i] - readings[i - 1]) * SDAT_FACTOR;
+    }
+    // value k = reading at the start of interval k (= end of interval k - 1)
+    const meter = new Float64Array(count + 1);
+    meter[0] = readings[0];
+    for (let k = 1; k <= count; k++) meter[k] = readings[k - 1];
+    for (let k = 1; k < count; k++) if (gap[k]) meter[k] = NaN;
+    bridge(meter);
+    data.usage[sensor] = usage;
+    data.prefix[sensor] = prefixOf(usage);
+    data.meter[sensor] = meter;
+    data.esl[sensor] = fakeEsl(readings, meter, start, count);
+  }
+  fakeData = data;
+  return data;
+}
+
+// the real esl readings with the sdat sum of the month before from the comparisons
+function realEsl(
+  points: DataPoint[],
+  comparisons: Comparison[],
+  gaps: DayRange[],
+): EslReading[] {
+  const sdatOf = new Map(
+    comparisons.map((c) => [`${c.start}_${c.end}`, c.sdat]),
+  );
+  const list: EslReading[] = [];
+  for (const point of points) {
+    const day = dayOf(point.ts);
+    const previous = list[list.length - 1];
+    let check: MonthCheck | null = null;
+    if (previous) {
+      check = monthCheck(
+        previous,
+        day,
+        point.value,
+        sdatOf.get(`${previous.ts}_${point.ts}`) ?? null,
+        gaps,
+      );
+      check.eslDiff = roundKwh(check.eslDiff);
+    }
+    list.push({ day, ts: point.ts, value: point.value, check });
+  }
+  return list;
+}
+
+const realCache = new WeakMap<ImportResult, AnalysisData>();
+
+// the imported data on the same grid, values outside DATA_START..DATA_END are left out
+export function realAnalysisData(result: ImportResult): AnalysisData {
+  const cached = realCache.get(result);
+  if (cached) return cached;
+  const start = dayStart(DATA_START);
+  const count = (dayStart(addDays(DATA_END, 1)) - start) / INTERVAL;
+  const indexOf = (ts: number) => {
+    const i = (ts - start) / INTERVAL;
+    return Number.isInteger(i) && i >= 0 && i < count ? i : -1;
+  };
+
+  // an interval only counts when both sensors have a value there
+  const seen = new Uint8Array(count);
+  const usage = {} as AnalysisData["usage"];
+  for (const direction of DIRECTIONS) {
+    const values = new Float64Array(count);
+    for (const point of result[direction].usage["15min"]) {
+      const i = indexOf(point.ts);
+      if (i === -1) continue;
+      values[i] = point.value;
+      seen[i]++;
+    }
+    usage[SENSOR_IDS[direction]] = values;
+  }
+  const gap = new Uint8Array(count);
+  for (let i = 0; i < count; i++) {
+    if (seen[i] < DIRECTIONS.length) gap[i] = 1;
+  }
+
+  // both sensors have the same gaps, a gap ends at 00:00 of the day after
+  const gaps = result.consumption.gaps.flatMap((range) => {
+    const inside = intersect(
+      { from: dayOf(range.start), to: dayOf(range.end - 1) },
+      USAGE_SCOPE.data,
+    );
+    return inside ? [inside] : [];
+  });
+
+  const data: AnalysisData = {
+    start,
+    count,
+    gap,
+    usage,
+    prefix: {} as AnalysisData["prefix"],
+    meter: {} as AnalysisData["meter"],
+    esl: {} as AnalysisData["esl"],
+    gaps,
+    ratio: result.consumption.meterRatio,
+  };
+
+  for (const direction of DIRECTIONS) {
+    const sensor = SENSOR_IDS[direction];
+    const own = result[direction];
+    data.prefix[sensor] = prefixOf(usage[sensor]);
+
+    // meterReading["15min"] has the start of the interval as ts and the reading at its end
+    const meter = new Float64Array(count + 1).fill(NaN);
+    for (const point of own.meterReading["15min"]) {
+      const i = indexOf(point.ts);
+      if (i !== -1) meter[i + 1] = point.value;
+    }
+    // the reading before the first interval is one sdat value lower (sdat ÷ ratio like 2018)
+    if (!Number.isNaN(meter[1])) {
+      meter[0] = meter[1] - usage[sensor][0] / own.meterRatio;
+    }
+    bridge(meter);
+    data.meter[sensor] = meter;
+    data.esl[sensor] = realEsl(own.esl, own.comparisons, gaps);
+  }
+  realCache.set(result, data);
+  return data;
+}
+
 interface DayInfo {
   key: DayKey;
   // interval indices of the grid, a included, b not
@@ -51,38 +343,35 @@ interface DayInfo {
   gap: boolean;
 }
 
-let dayTable: DayInfo[] | null = null;
+const dayTables = new WeakMap<AnalysisData, DayInfo[]>();
 
-function days(): DayInfo[] {
-  if (dayTable) return dayTable;
-  const { start, gap } = getGrid();
+// a day with a missing value counts as gap day, it is left out instead of shown too low
+function days(data: AnalysisData): DayInfo[] {
+  const cached = dayTables.get(data);
+  if (cached) return cached;
+  const { start, gap } = data;
   const count = daysBetween(DATA_START, DATA_END) + 1;
-  dayTable = Array.from({ length: count }, (_, index) => {
+  const table = Array.from({ length: count }, (_, index) => {
     const key = addDays(DATA_START, index);
     const a = (dayStart(key) - start) / INTERVAL;
     const b = (dayStart(addDays(key, 1)) - start) / INTERVAL;
-    return { key, a, b, gap: gap[a] === 1 };
+    return { key, a, b, gap: gap.subarray(a, b).includes(1) };
   });
-  return dayTable;
+  dayTables.set(data, table);
+  return table;
 }
 
-function daysIn(range: DayRange): DayInfo[] {
+function daysIn(range: DayRange, data: AnalysisData): DayInfo[] {
   const inside = intersect(range, USAGE_SCOPE.data);
   if (!inside) return [];
-  const table = days();
+  const table = days(data);
   const first = daysBetween(DATA_START, inside.from);
   return table.slice(first, first + daysBetween(inside.from, inside.to) + 1);
 }
 
-// sdat value of interval i in kWh
-function usage(readings: Float64Array, i: number): number {
-  return i === 0 ? 0 : (readings[i] - readings[i - 1]) * SDAT_FACTOR;
-}
-
-function sum(readings: Float64Array, a: number, b: number): number {
-  return (
-    (readings[b - 1] - (a === 0 ? readings[0] : readings[a - 1])) * SDAT_FACTOR
-  );
+// sum of the sdat values of the intervals a (included) to b (not included)
+function sum(prefix: Float64Array, a: number, b: number): number {
+  return prefix[b] - prefix[a];
 }
 
 export interface UsageBucket {
@@ -94,8 +383,8 @@ export interface UsageBucket {
   missingDays: number;
 }
 
-const CONSUMPTION: SensorId = "ID742";
-const FEED_IN: SensorId = "ID735";
+const CONSUMPTION: SensorId = SENSOR_IDS.consumption;
+const FEED_IN: SensorId = SENSOR_IDS.feedIn;
 
 function mondayOf(day: DayKey): DayKey {
   const weekday = (new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7;
@@ -107,23 +396,20 @@ function mondayOf(day: DayKey): DayKey {
 export function usageBuckets(
   range: DayRange,
   resolution: Resolution,
+  data: AnalysisData = fakeAnalysisData(),
 ): UsageBucket[] {
-  const { start } = getGrid();
-  const consumption = getReadings(CONSUMPTION);
-  const feedIn = getReadings(FEED_IN);
-  const list = daysIn(range);
+  const { start } = data;
+  const consumption = data.prefix[CONSUMPTION];
+  const feedIn = data.prefix[FEED_IN];
+  const list = daysIn(range, data);
   const buckets: UsageBucket[] = [];
 
   if (resolution === "15min" || resolution === "hour") {
     const step = resolution === "15min" ? 1 : 4;
     for (const day of list) {
       for (let i = day.a; i < day.b; i += step) {
-        const value = (readings: Float64Array) =>
-          day.gap
-            ? null
-            : step === 1
-              ? usage(readings, i)
-              : sum(readings, i, i + step);
+        const value = (prefix: Float64Array) =>
+          day.gap ? null : sum(prefix, i, i + step);
         buckets.push({
           start: start + i * INTERVAL,
           end: start + (i + step) * INTERVAL,
@@ -193,19 +479,23 @@ export interface UsageTotals {
   peak: { value: number; ts: number } | null;
 }
 
-export function usageTotals(range: DayRange): UsageTotals {
-  const { start } = getGrid();
-  const consumption = getReadings(CONSUMPTION);
-  const feedIn = getReadings(FEED_IN);
+export function usageTotals(
+  range: DayRange,
+  data: AnalysisData = fakeAnalysisData(),
+): UsageTotals {
+  const { start } = data;
+  const consumption = data.prefix[CONSUMPTION];
+  const feedIn = data.prefix[FEED_IN];
+  const values = data.usage[CONSUMPTION];
   let c = 0;
   let f = 0;
   let peak: UsageTotals["peak"] = null;
-  for (const day of daysIn(range)) {
+  for (const day of daysIn(range, data)) {
     if (day.gap) continue;
     c += sum(consumption, day.a, day.b);
     f += sum(feedIn, day.a, day.b);
     for (let i = day.a; i < day.b; i++) {
-      const value = usage(consumption, i);
+      const value = values[i];
       if (!peak || value > peak.value) {
         peak = { value, ts: start + i * INTERVAL };
       }
@@ -223,7 +513,9 @@ export interface YearTotals {
   partial: boolean;
 }
 
-export function yearTotals(): YearTotals[] {
+export function yearTotals(
+  data: AnalysisData = fakeAnalysisData(),
+): YearTotals[] {
   const { from, to } = USAGE_SCOPE.data;
   const years: YearTotals[] = [];
   for (
@@ -235,7 +527,7 @@ export function yearTotals(): YearTotals[] {
       { from: `${year}-01-01`, to: `${year}-12-31` },
       USAGE_SCOPE.data,
     )!;
-    const { consumption, feedIn } = usageTotals(range);
+    const { consumption, feedIn } = usageTotals(range, data);
     years.push({
       year,
       range,
@@ -248,8 +540,8 @@ export function yearTotals(): YearTotals[] {
 }
 
 // 15 min values per sensor, gap days have none
-export function valueCount(): number {
-  const { count, gap } = getGrid();
+export function valueCount(data: AnalysisData = fakeAnalysisData()): number {
+  const { count, gap } = data;
   let missing = 0;
   for (let i = 0; i < count; i++) missing += gap[i];
   return count - missing;
@@ -275,9 +567,12 @@ function clipped(range: DayRange, from: DayKey, to: DayKey) {
 }
 
 // the parts of the range without sdat: the gap days and everything after 06.09.2021
-export function usageRegions(range: DayRange): ChartRegion[] {
+export function usageRegions(
+  range: DayRange,
+  data: AnalysisData = fakeAnalysisData(),
+): ChartRegion[] {
   const regions: ChartRegion[] = [];
-  for (const gap of GAPS) {
+  for (const gap of data.gaps) {
     const area = clipped(range, gap.from, gap.to);
     if (!area) continue;
     regions.push({
@@ -306,7 +601,10 @@ export function usageRegions(range: DayRange): ChartRegion[] {
 }
 
 // 2018 is calculated backwards from the first esl reading, after sdat only the esl readings are left
-export function meterRegions(range: DayRange): ChartRegion[] {
+export function meterRegions(
+  range: DayRange,
+  data: AnalysisData = fakeAnalysisData(),
+): ChartRegion[] {
   const regions: ChartRegion[] = [];
   const backcalc = clipped(range, DATA_START, addDays(FIRST_ESL, -1));
   if (backcalc) {
@@ -316,7 +614,7 @@ export function meterRegions(range: DayRange): ChartRegion[] {
       fill: false,
       edge: "end",
       label: "Zurückgerechnet",
-      sub: `ESL ${formatDay(FIRST_ESL)} · SDAT ÷ ${SDAT_FACTOR.toFixed(2)}`,
+      sub: `ESL ${formatDay(FIRST_ESL)} · SDAT ÷ ${data.ratio.toFixed(2)}`,
       placement: "top",
     });
   }
@@ -339,36 +637,6 @@ export function meterRegions(range: DayRange): ChartRegion[] {
 export const GAP_MONTHS = new Set(GAPS.map((gap) => gap.from.slice(0, 7)));
 export const PARTIAL_MONTH = DATA_END.slice(0, 7);
 
-// meter readings on every quarter hour, gap days drawn as a straight line between the readings around them
-const displayCache = new Map<SensorId, Float64Array>();
-
-function displayReadings(sensor: SensorId): Float64Array {
-  const cached = displayCache.get(sensor);
-  if (cached) return cached;
-  const { count, gap } = getGrid();
-  const readings = getReadings(sensor);
-  // value k = reading at the start of interval k (= end of interval k - 1)
-  const values = new Float64Array(count + 1);
-  values[0] = readings[0];
-  for (let k = 1; k <= count; k++) values[k] = readings[k - 1];
-  let k = 0;
-  while (k < count) {
-    if (!gap[k]) {
-      k++;
-      continue;
-    }
-    const a = k;
-    while (k < count && gap[k]) k++;
-    const from = values[a];
-    const to = values[k];
-    for (let j = a + 1; j < k; j++) {
-      values[j] = from + ((to - from) * (j - a)) / (k - a);
-    }
-  }
-  displayCache.set(sensor, values);
-  return values;
-}
-
 export interface MeterPoint {
   ts: number;
   value: number;
@@ -379,10 +647,11 @@ export function meterLine(
   sensor: SensorId,
   range: DayRange,
   resolution: "15min" | "hour" | "day",
+  data: AnalysisData = fakeAnalysisData(),
 ): MeterPoint[] {
-  const { start, count } = getGrid();
-  const values = displayReadings(sensor);
-  const list = daysIn(range);
+  const { start, count } = data;
+  const values = data.meter[sensor];
+  const list = daysIn(range, data);
   if (list.length === 0) return [];
   const step = resolution === "15min" ? 1 : resolution === "hour" ? 4 : 0;
   const points: MeterPoint[] = [];
@@ -401,95 +670,20 @@ export function meterLine(
 }
 
 // last calculated reading, where the dashed esl line starts
-export function sdatEndReading(sensor: SensorId): MeterPoint {
-  const { start, count } = getGrid();
-  return {
-    ts: start + count * INTERVAL,
-    value: displayReadings(sensor)[count],
-  };
+export function sdatEndReading(
+  sensor: SensorId,
+  data: AnalysisData = fakeAnalysisData(),
+): MeterPoint {
+  const { start, count } = data;
+  return { ts: start + count * INTERVAL, value: data.meter[sensor][count] };
 }
 
-export interface MonthCheck {
-  // «Februar»
-  month: string;
-  eslDiff: number;
-  // null after the end of sdat
-  sdat: number | null;
-  missing: DayRange[];
-}
-
-export interface EslReading {
-  day: DayKey;
-  ts: number;
-  value: number;
-  // comparison with the reading before, null for the first one
-  check: MonthCheck | null;
-}
-
-const eslCache = new Map<SensorId, EslReading[]>();
-
-function monthKey(year: number, month: number): DayKey {
-  return dayKey(year, month, 1);
-}
-
-// one esl reading on the first of every month. after the end of sdat the fake readings
-// grow by the usage of the same month one year earlier
-export function eslReadings(sensor: SensorId): EslReading[] {
-  const cached = eslCache.get(sensor);
-  if (cached) return cached;
-  const { start, count } = getGrid();
-  const values = displayReadings(sensor);
-  const raw = getReadings(sensor);
-  const lastTs = start + count * INTERVAL;
-  const known = new Map<DayKey, number>();
-  const valueOn = (day: DayKey): number => {
-    const ts = dayStart(day);
-    if (ts <= lastTs) return values[(ts - start) / INTERVAL];
-    const stored = known.get(day);
-    if (stored !== undefined) return stored;
-    const [y, m] = day.split("-").map(Number);
-    const value =
-      valueOn(monthKey(y, m - 2)) +
-      valueOn(monthKey(y - 1, m - 1)) -
-      valueOn(monthKey(y - 1, m - 2));
-    known.set(day, value);
-    return value;
-  };
-
-  const list: EslReading[] = [];
-  const [firstYear, firstMonth] = FIRST_ESL.split("-").map(Number);
-  for (let i = 0; ; i++) {
-    const day = monthKey(firstYear, firstMonth - 1 + i);
-    if (day > LAST_ESL) break;
-    const ts = dayStart(day);
-    const value = valueOn(day);
-    const previous = list[list.length - 1];
-    let check: MonthCheck | null = null;
-    if (previous) {
-      const month = { from: previous.day, to: addDays(day, -1) };
-      const missing = GAPS.filter((gap) => intersect(gap, month));
-      let sdat: number | null = null;
-      if (ts <= lastTs) {
-        // the sdat sum leaves out the missing days, the esl difference still counts them
-        let gapUsage = 0;
-        for (const gap of missing) {
-          const a = (dayStart(gap.from) - start) / INTERVAL;
-          const b = (dayStart(addDays(gap.to, 1)) - start) / INTERVAL;
-          gapUsage += raw[b - 1] - raw[a - 1];
-        }
-        sdat = (value - previous.value - gapUsage) * SDAT_FACTOR;
-      }
-      check = {
-        month: MONTH_NAMES[Number(previous.day.slice(5, 7)) - 1],
-        eslDiff: value - previous.value,
-        sdat,
-        missing,
-      };
-    }
-    list.push({ day, ts, value, check });
-  }
-  eslCache.set(sensor, list);
-  return list;
+// one esl reading on the first of every month
+export function eslReadings(
+  sensor: SensorId,
+  data: AnalysisData = fakeAnalysisData(),
+): EslReading[] {
+  return data.esl[sensor];
 }
 
 export function isIncomplete(reading: EslReading): boolean {
@@ -497,10 +691,14 @@ export function isIncomplete(reading: EslReading): boolean {
 }
 
 // esl readings inside the range plus the neighbours outside, so lines run to the edges
-export function eslAround(sensor: SensorId, range: DayRange): EslReading[] {
+export function eslAround(
+  sensor: SensorId,
+  range: DayRange,
+  data: AnalysisData = fakeAnalysisData(),
+): EslReading[] {
   const from = rangeStart(range);
   const to = rangeEnd(range);
-  const list = eslReadings(sensor);
+  const list = eslReadings(sensor, data);
   const first = list.findIndex((reading) => reading.ts >= from);
   const last = list.findLastIndex((reading) => reading.ts <= to);
   if (first === -1) return list.slice(-1);
@@ -532,8 +730,11 @@ export function sourceSegments(range: DayRange): SourceSegment[] {
   });
 }
 
-export function gapsIn(range: DayRange): DayRange[] {
-  return GAPS.flatMap((gap) => {
+export function gapsIn(
+  range: DayRange,
+  data: AnalysisData = fakeAnalysisData(),
+): DayRange[] {
+  return data.gaps.flatMap((gap) => {
     const inside = intersect(gap, range);
     return inside ? [inside] : [];
   });
@@ -546,8 +747,11 @@ function monthOf(day: DayKey): DayRange {
 
 // red marks under the zählerstand chart and in the sources bar, both need the same x
 // over several years whole months are marked, single days would be too thin
-export function gapMarks(range: DayRange): DayRange[] {
-  const gaps = gapsIn(range);
+export function gapMarks(
+  range: DayRange,
+  data: AnalysisData = fakeAnalysisData(),
+): DayRange[] {
+  const gaps = gapsIn(range, data);
   if (daysBetween(range.from, range.to) <= 400) return gaps;
   return [...new Set(gaps.map((gap) => gap.from.slice(0, 7)))].flatMap(
     (month) => {

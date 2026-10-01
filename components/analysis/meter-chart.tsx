@@ -14,6 +14,7 @@ import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
 import { localParts, shortRange, xTicksFor } from "./chart-axes";
 import type { Drill } from "./controls";
+import { useAnalysisData } from "./analysis-source";
 import {
   eslAround,
   eslReadings,
@@ -96,35 +97,39 @@ export function MeterChart({
   const resolution = lineResolution(period);
   const t0 = rangeStart(range);
   const t1 = rangeEnd(range);
+  const data = useAnalysisData();
   const points = useMemo(
-    () => meterLine(sensor, range, resolution),
-    [sensor, range, resolution],
+    () => meterLine(sensor, range, resolution, data),
+    [sensor, range, resolution, data],
   );
   const esl = useMemo(
     () =>
-      eslAround(sensor, range).filter(
+      eslAround(sensor, range, data).filter(
         (reading) => reading.ts >= t0 && reading.ts <= t1,
       ),
-    [sensor, range, t0, t1],
+    [sensor, range, t0, t1, data],
   );
   const dashed = useMemo(() => {
-    const start = sdatEndReading(sensor);
+    const start = sdatEndReading(sensor, data);
     if (t1 <= start.ts) return [];
-    const after = eslReadings(sensor)
+    const after = eslReadings(sensor, data)
       .filter((reading) => reading.ts > start.ts)
       .map(({ ts, value }) => ({ ts, value }));
     return [start, ...after];
-  }, [sensor, t1]);
-  const regions = useMemo(() => meterRegions(range), [range]);
+  }, [sensor, t1, data]);
+  const regions = useMemo(() => meterRegions(range, data), [range, data]);
   // centred on the red marks of the sources bar below the chart
   const gapDots = useMemo(
     () =>
-      gapMarks(range).flatMap((mark) => {
+      gapMarks(range, data).flatMap((mark) => {
         const ts = (rangeStart(mark) + rangeEnd(mark)) / 2;
         const value = interpolate(points, ts);
-        return value === null ? [] : [{ key: mark.from, ts, value, mark }];
+        const missing = gapsIn(mark, data);
+        return value === null
+          ? []
+          : [{ key: mark.from, ts, value, mark, missing }];
       }),
-    [range, points],
+    [range, points, data],
   );
   const xTicks = useMemo(
     () => xTicksFor(range, resolutionOf(period)),
@@ -224,7 +229,7 @@ export function MeterChart({
     if (index < esl.length) return eslHover(esl[index], scale);
     const dot = gapDots[index - esl.length];
     if (dot) {
-      const next = eslReadings(sensor).find(
+      const next = eslReadings(sensor, data).find(
         (reading) => reading.ts >= rangeEnd(dot.mark),
       );
       return gapHover(dot, next, scale);
@@ -323,7 +328,7 @@ function eslHover(reading: EslReading, scale: Scale): HoverContent {
 }
 
 function gapHover(
-  dot: { ts: number; value: number; mark: DayRange },
+  dot: { ts: number; value: number; mark: DayRange; missing: DayRange[] },
   next: EslReading | undefined,
   scale: Scale,
 ): HoverContent {
@@ -345,7 +350,7 @@ function gapHover(
         <TooltipTitle>Fehlende SDAT-Tage</TooltipTitle>
         <TooltipRow
           label="SDAT fehlt"
-          value={gapsIn(dot.mark).map(shortRange).join(", ")}
+          value={dot.missing.map(shortRange).join(", ")}
           tone="danger"
         />
         <TooltipRow label="Linie" value="gerade verbunden" tone="muted" />
