@@ -9,16 +9,15 @@ import { cn } from "@/lib/utils";
 import {
   addDays,
   axisLabels,
-  BACKCALC_END,
+  backcalcEnd,
   chartSeries,
-  DATA_START,
   dayStart,
   rangeFraction,
   sensorInfo,
   yTicks,
   type ExportSelection,
 } from "./export-data";
-import { useExportSource } from "./export-source";
+import { useDataWindow, useExportSource } from "./export-source";
 import { useElementSize } from "./hooks";
 
 const TOP_PAD = 6;
@@ -30,7 +29,8 @@ const LINE = {
   [SENSOR_IDS.feedIn]: { stroke: "var(--brand)", label: "text-brand-label" },
 } satisfies Record<SensorId, object>;
 
-// small meter reading chart of the selected range: backcalculated 2018 in amber, gaps in red on the bar below
+// small meter reading chart of the selected range: the backcalculated part before the first esl
+// reading in amber, gaps in red on the bar below
 export function MeterChart({
   selection,
   dimmed,
@@ -41,6 +41,7 @@ export function MeterChart({
   const [plotRef, { width, height }] = useElementSize<HTMLDivElement>();
   const { range } = selection;
   const source = useExportSource();
+  const dataWindow = useDataWindow();
   const series = useMemo(
     () => chartSeries(selection, undefined, source),
     [selection, source],
@@ -56,10 +57,13 @@ export function MeterChart({
   const y = (value: number) =>
     TOP_PAD + (1 - (value - bottom) / (top - bottom)) * (height - TOP_PAD);
 
-  const backcalc = {
-    from: rangeFraction(range, dayStart(DATA_START)),
-    to: rangeFraction(range, dayStart(addDays(BACKCALC_END, 1))),
-  };
+  const lastBackcalc = backcalcEnd(dataWindow);
+  const backcalc = lastBackcalc
+    ? {
+        from: rangeFraction(range, dayStart(dataWindow.from)),
+        to: rangeFraction(range, dayStart(addDays(lastBackcalc, 1))),
+      }
+    : { from: 0, to: 0 };
   // both sensors have the same gaps
   const gaps = useMemo(
     () =>

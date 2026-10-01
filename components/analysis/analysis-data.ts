@@ -1,14 +1,16 @@
 import {
   addDays,
-  DATA_END,
-  DATA_START,
+  backcalcEnd,
+  dataWindow,
   dayKey,
   dayOf,
   daysBetween,
   dayStart,
+  EMPTY_WINDOW,
   formatDay,
   formatDayRange,
   INTERVAL,
+  type DataWindow,
   type DayKey,
   type DayRange,
 } from "@/components/export/export-data";
@@ -24,24 +26,46 @@ import {
 import { intersect, MONTH_NAMES, type Resolution, type Scope } from "./period";
 
 // the data of the verbrauch and zählerstand pages: sdat usage, meter readings, esl readings
-// and gaps on one 15 min grid from DATA_START to DATA_END.
+// and gaps on one 15 min grid over the days of the import (data.window).
 // it comes from the ImportResult (realAnalysisData), before the first import it is empty
 // (emptyAnalysisData). every function takes the data as its last parameter, the pages get it from useAnalysisData (analysis-source.ts).
-// no store or react imports here, the pages (server components) read the scopes
+// no store or react imports here
 
-export const FIRST_ESL: DayKey = "2019-01-01";
-export const LAST_ESL: DayKey = "2022-09-01";
+const scopes = new WeakMap<AnalysisData, { usage: Scope; meter: Scope }>();
+
+function scopesOf(data: AnalysisData): { usage: Scope; meter: Scope } {
+  const cached = scopes.get(data);
+  if (cached) return cached;
+  const { from, to, firstEsl, lastEsl } = data.window;
+  const sdat = { from, to };
+  // the zählerstand goes on with the esl readings, «Alles» runs to the end of that year
+  const meterFrom = firstEsl && firstEsl < from ? firstEsl : from;
+  const meterTo = lastEsl && lastEsl > to ? lastEsl : to;
+  const value = {
+    usage: { data: sdat, all: sdat },
+    meter: {
+      data: { from: meterFrom, to: meterTo },
+      all: { from: meterFrom, to: `${meterTo.slice(0, 4)}-12-31` },
+    },
+  };
+  scopes.set(data, value);
+  return value;
+}
+
+// the verbrauch: only the days with sdat
+export function usageScope(data: AnalysisData): Scope {
+  return scopesOf(data).usage;
+}
+
+// the zählerstand: sdat plus the esl readings before and after
+export function meterScope(data: AnalysisData): Scope {
+  return scopesOf(data).meter;
+}
+
 // first day without sdat values
-export const SDAT_END: DayKey = addDays(DATA_END, 1);
-
-export const USAGE_SCOPE: Scope = {
-  data: { from: DATA_START, to: DATA_END },
-  all: { from: DATA_START, to: DATA_END },
-};
-export const METER_SCOPE: Scope = {
-  data: { from: DATA_START, to: LAST_ESL },
-  all: { from: DATA_START, to: "2022-12-31" },
-};
+export function sdatEnd(data: AnalysisData): DayKey {
+  return addDays(data.window.to, 1);
+}
 
 export function rangeStart(range: DayRange): number {
   return dayStart(range.from);
@@ -68,7 +92,9 @@ export interface EslReading {
 }
 
 export interface AnalysisData {
-  // ts of the first interval and number of 15 min intervals up to the end of DATA_END
+  // the days of the import, the grid runs from window.from to the end of window.to
+  window: DataWindow;
+  // ts of the first interval and number of 15 min intervals
   start: number;
   count: number;
   // 1 where the interval has no sdat value
@@ -83,7 +109,7 @@ export interface AnalysisData {
   esl: Record<SensorId, EslReading[]>;
   // the gaps as whole days
   gaps: DayRange[];
-  // sdat ÷ esl, used to calculate 2018 backwards (3.00 in the test data)
+  // sdat ÷ esl, used to calculate backwards before the first esl reading (3.00 in the test data)
   ratio: number;
 }
 
@@ -158,18 +184,22 @@ function realEsl(
   return list;
 }
 
-function gridStart(): { start: number; count: number } {
-  const start = dayStart(DATA_START);
-  return { start, count: (dayStart(addDays(DATA_END, 1)) - start) / INTERVAL };
+function gridStart(window: DataWindow): { start: number; count: number } {
+  const start = dayStart(window.from);
+  return {
+    start,
+    count: (dayStart(addDays(window.to, 1)) - start) / INTERVAL,
+  };
 }
 
 let empty: AnalysisData | null = null;
 
-// the grid without any value, every interval counts as gap
+// one day without any value, every interval counts as gap
 export function emptyAnalysisData(): AnalysisData {
   if (empty) return empty;
-  const { start, count } = gridStart();
+  const { start, count } = gridStart(EMPTY_WINDOW);
   const data: AnalysisData = {
+    window: EMPTY_WINDOW,
     start,
     count,
     gap: new Uint8Array(count).fill(1),
@@ -193,11 +223,12 @@ export function emptyAnalysisData(): AnalysisData {
 
 const realCache = new WeakMap<ImportResult, AnalysisData>();
 
-// the imported data on the same grid, values outside DATA_START..DATA_END are left out
+// the imported data on one grid over its sdat days
 export function realAnalysisData(result: ImportResult): AnalysisData {
   const cached = realCache.get(result);
   if (cached) return cached;
-  const { start, count } = gridStart();
+  const window = dataWindow(result);
+  const { start, count } = gridStart(window);
   const indexOf = (ts: number) => {
     const i = (ts - start) / INTERVAL;
     return Number.isInteger(i) && i >= 0 && i < count ? i : -1;
@@ -225,12 +256,13 @@ export function realAnalysisData(result: ImportResult): AnalysisData {
   const gaps = result.consumption.gaps.flatMap((range) => {
     const inside = intersect(
       { from: dayOf(range.start), to: dayOf(range.end - 1) },
-      USAGE_SCOPE.data,
+      { from: window.from, to: window.to },
     );
     return inside ? [inside] : [];
   });
 
   const data: AnalysisData = {
+    window,
     start,
     count,
     gap,
@@ -253,7 +285,7 @@ export function realAnalysisData(result: ImportResult): AnalysisData {
       const i = indexOf(point.ts);
       if (i !== -1) meter[i + 1] = point.value;
     }
-    // the reading before the first interval is one sdat value lower (sdat ÷ ratio like 2018)
+    // the reading before the first interval is one sdat value lower (sdat ÷ ratio like the backcalculation)
     if (!Number.isNaN(meter[1])) {
       meter[0] = meter[1] - usage[sensor][0] / own.meterRatio;
     }
@@ -279,10 +311,10 @@ const dayTables = new WeakMap<AnalysisData, DayInfo[]>();
 function days(data: AnalysisData): DayInfo[] {
   const cached = dayTables.get(data);
   if (cached) return cached;
-  const { start, gap } = data;
-  const count = daysBetween(DATA_START, DATA_END) + 1;
+  const { start, gap, window } = data;
+  const count = daysBetween(window.from, window.to) + 1;
   const table = Array.from({ length: count }, (_, index) => {
-    const key = addDays(DATA_START, index);
+    const key = addDays(window.from, index);
     const a = (dayStart(key) - start) / INTERVAL;
     const b = (dayStart(addDays(key, 1)) - start) / INTERVAL;
     return { key, a, b, gap: gap.subarray(a, b).includes(1) };
@@ -292,10 +324,10 @@ function days(data: AnalysisData): DayInfo[] {
 }
 
 function daysIn(range: DayRange, data: AnalysisData): DayInfo[] {
-  const inside = intersect(range, USAGE_SCOPE.data);
+  const inside = intersect(range, usageScope(data).data);
   if (!inside) return [];
   const table = days(data);
-  const first = daysBetween(DATA_START, inside.from);
+  const first = daysBetween(data.window.from, inside.from);
   return table.slice(first, first + daysBetween(inside.from, inside.to) + 1);
 }
 
@@ -365,7 +397,7 @@ export function usageBuckets(
     return buckets;
   }
 
-  const inside = intersect(range, USAGE_SCOPE.data);
+  const inside = intersect(range, usageScope(data).data);
   if (!inside) return buckets;
   const groups = new Map<DayKey, DayInfo[]>();
   for (const day of list) {
@@ -441,7 +473,8 @@ export interface YearTotals {
 }
 
 export function yearTotals(data: AnalysisData): YearTotals[] {
-  const { from, to } = USAGE_SCOPE.data;
+  const scope = usageScope(data).data;
+  const { from, to } = scope;
   const years: YearTotals[] = [];
   for (
     let year = Number(from.slice(0, 4));
@@ -450,7 +483,7 @@ export function yearTotals(data: AnalysisData): YearTotals[] {
   ) {
     const range = intersect(
       { from: `${year}-01-01`, to: `${year}-12-31` },
-      USAGE_SCOPE.data,
+      scope,
     )!;
     const { consumption, feedIn } = usageTotals(range, data);
     years.push({
@@ -528,7 +561,8 @@ export function monthComparison(
   direction: Direction,
   data: AnalysisData,
 ): MonthComparison {
-  const { from, to } = USAGE_SCOPE.data;
+  const scope = usageScope(data).data;
+  const { from, to } = scope;
   const first = Number(from.slice(0, 4));
   const years = Array.from(
     { length: Number(to.slice(0, 4)) - first + 1 },
@@ -538,7 +572,7 @@ export function monthComparison(
     years.map(() => null),
   );
   let max = 0;
-  for (const bucket of usageBuckets(USAGE_SCOPE.data, "month", data)) {
+  for (const bucket of usageBuckets(scope, "month", data)) {
     const value = bucket[direction];
     if (value === null) continue;
     const [year, month] = dayOf(bucket.start).split("-").map(Number);
@@ -578,7 +612,7 @@ function clipped(range: DayRange, from: DayKey, to: DayKey) {
   return inside ? { from: rangeStart(inside), to: rangeEnd(inside) } : null;
 }
 
-// the parts of the range without sdat: the gap days and everything after 06.09.2021
+// the parts of the range without sdat: the gap days and everything after the last sdat day
 export function usageRegions(
   range: DayRange,
   data: AnalysisData,
@@ -597,40 +631,52 @@ export function usageRegions(
       placement: "center",
     });
   }
-  const end = clipped(range, SDAT_END, "9999-12-31");
+  const first = sdatEnd(data);
+  const end = clipped(range, first, "9999-12-31");
   if (end) {
     regions.push({
       key: "end",
       ...end,
       fill: true,
       edge: "start",
-      label: "Keine SDAT-Daten ab 07.09.2021",
-      sub: "Für diesen Zeitraum gibt es nur ESL-Zählerstände (siehe Zählerstand).",
+      label: `Keine SDAT-Daten ab ${formatDay(first)}`,
+      sub: hasEslAfterSdat(data)
+        ? "Für diesen Zeitraum gibt es nur ESL-Zählerstände (siehe Zählerstand)."
+        : undefined,
       placement: "center",
     });
   }
   return regions;
 }
 
-// 2018 is calculated backwards from the first esl reading, after sdat only the esl readings are left
+function hasEslAfterSdat(data: AnalysisData): boolean {
+  const { lastEsl, to } = data.window;
+  return lastEsl !== null && lastEsl > to;
+}
+
+// the days before the first esl reading are calculated backwards, after sdat only the esl readings are left
 export function meterRegions(
   range: DayRange,
   data: AnalysisData,
 ): ChartRegion[] {
   const regions: ChartRegion[] = [];
-  const backcalc = clipped(range, DATA_START, addDays(FIRST_ESL, -1));
-  if (backcalc) {
+  const { from, firstEsl } = data.window;
+  const lastBackcalc = backcalcEnd(data.window);
+  const backcalc =
+    firstEsl && lastBackcalc ? clipped(range, from, lastBackcalc) : null;
+  if (firstEsl && backcalc) {
     regions.push({
       key: "backcalc",
       ...backcalc,
       fill: false,
       edge: "end",
       label: "Zurückgerechnet",
-      sub: `ESL ${formatDay(FIRST_ESL)} · SDAT ÷ ${data.ratio.toFixed(2)}`,
+      sub: `ESL ${formatDay(firstEsl)} · SDAT ÷ ${data.ratio.toFixed(2)}`,
       placement: "top",
     });
   }
-  const end = clipped(range, SDAT_END, "9999-12-31");
+  const first = sdatEnd(data);
+  const end = clipped(range, first, "9999-12-31");
   if (end) {
     regions.push({
       key: "end",
@@ -638,7 +684,7 @@ export function meterRegions(
       fill: true,
       edge: "start",
       label: "Keine SDAT-Daten",
-      sub: `ab ${formatDay(SDAT_END)} · nur ESL-Ablesungen`,
+      sub: `ab ${formatDay(first)}${hasEslAfterSdat(data) ? " · nur ESL-Ablesungen" : ""}`,
       placement: "bottom",
     });
   }
@@ -651,7 +697,12 @@ export function gapMonths(data: AnalysisData): Set<string> {
     data.gaps.flatMap((gap) => [gap.from.slice(0, 7), gap.to.slice(0, 7)]),
   );
 }
-export const PARTIAL_MONTH = DATA_END.slice(0, 7);
+
+// the month where sdat stops in the middle, null when it ends on the last day of a month
+export function partialMonth(data: AnalysisData): string | null {
+  const { to } = data.window;
+  return addDays(to, 1).slice(8) === "01" ? null : to.slice(0, 7);
+}
 
 export interface MeterPoint {
   ts: number;
@@ -730,15 +781,19 @@ export interface SourceSegment {
   range: DayRange;
 }
 
-export function sourceSegments(range: DayRange): SourceSegment[] {
+// parts that don't exist in the data (no esl before or after sdat) have an empty range and drop out
+export function sourceSegments(
+  range: DayRange,
+  data: AnalysisData,
+): SourceSegment[] {
+  const { from, to, firstEsl, lastEsl } = data.window;
+  const measured = firstEsl && firstEsl > from ? firstEsl : from;
+  const eslEnd = lastEsl && lastEsl > to ? lastEsl : to;
   const parts: SourceSegment[] = [
-    {
-      kind: "backcalc",
-      range: { from: DATA_START, to: addDays(FIRST_ESL, -1) },
-    },
-    { kind: "measured", range: { from: FIRST_ESL, to: DATA_END } },
-    { kind: "eslOnly", range: { from: SDAT_END, to: LAST_ESL } },
-    { kind: "none", range: { from: addDays(LAST_ESL, 1), to: "9999-12-31" } },
+    { kind: "backcalc", range: { from, to: addDays(measured, -1) } },
+    { kind: "measured", range: { from: measured, to } },
+    { kind: "eslOnly", range: { from: sdatEnd(data), to: eslEnd } },
+    { kind: "none", range: { from: addDays(eslEnd, 1), to: "9999-12-31" } },
   ];
   return parts.flatMap((part) => {
     const inside = intersect(part.range, range);

@@ -1,19 +1,16 @@
 import {
   addDays,
-  DATA_END,
-  DATA_START,
   dayKey,
   dayStart,
   INTERVAL,
   SENSORS,
+  type DataWindow,
   type DayKey,
   type DayRange,
   type ExportSource,
 } from "@/components/export/export-data";
 import {
   bridge,
-  FIRST_ESL,
-  LAST_ESL,
   monthCheck,
   prefixOf,
   type AnalysisData,
@@ -26,6 +23,18 @@ import { SENSOR_IDS, type DataPoint, type SensorId } from "@/lib/types";
 
 // made-up readings with the same numbers as the figma frames, only for the tests of the
 // analysis and export helpers. the app itself only shows imported data
+
+// the same days as the test data in data/sdat and data/esl
+export const DATA_START: DayKey = "2018-01-01";
+export const DATA_END: DayKey = "2021-09-06";
+export const FIRST_ESL: DayKey = "2019-01-01";
+export const LAST_ESL: DayKey = "2022-09-01";
+export const FAKE_WINDOW: DataWindow = {
+  from: DATA_START,
+  to: DATA_END,
+  firstEsl: FIRST_ESL,
+  lastEsl: LAST_ESL,
+};
 
 export const GAPS: DayRange[] = [
   { from: "2020-02-09", to: "2020-02-09" },
@@ -210,6 +219,7 @@ export function fakeAnalysisData(): AnalysisData {
   if (fakeData) return fakeData;
   const { start, count, gap } = getGrid();
   const data: AnalysisData = {
+    window: FAKE_WINDOW,
     start,
     count,
     gap,

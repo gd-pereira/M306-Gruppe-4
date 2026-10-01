@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
-import { METER_SCOPE } from "@/components/analysis/analysis-data";
 import { MeterScreen } from "@/components/analysis/meter-screen";
-import { periodFromParams } from "@/components/analysis/period";
 import {
-  selectionFromParams,
-  selectionParams,
+  exportBackHref,
+  sensorFromParams,
 } from "@/components/export/selection";
 
 export const metadata: Metadata = { title: "Zählerstand" };
@@ -16,15 +14,13 @@ export default async function MeterPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const initial = periodFromParams(params, METER_SCOPE);
-  const selection = selectionFromParams(params);
-  const back =
-    params.quelle === "export" ? `/export?${selectionParams(selection)}` : null;
+  const sensor = sensorFromParams(params);
+  const back = params.quelle === "export" ? exportBackHref(params) : null;
   return (
     <MeterScreen
-      key={`${selection.sensor}_${initial.range.from}_${initial.range.to}`}
-      initial={initial}
-      sensor={selection.sensor}
+      key={`${sensor}_${params.von}_${params.bis}`}
+      params={params}
+      sensor={sensor}
       back={back}
     />
   );

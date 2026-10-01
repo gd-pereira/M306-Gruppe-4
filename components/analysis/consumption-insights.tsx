@@ -8,7 +8,8 @@ import { BalanceChart, BALANCE_SERIES } from "./balance-chart";
 import { drillProps } from "./controls";
 import { HourHeatmap } from "./hour-heatmap";
 import { MonthComparison } from "./month-comparison";
-import { USAGE_SCOPE } from "./analysis-data";
+import { usageScope } from "./analysis-data";
+import { useAnalysisData } from "./analysis-source";
 import { LegendPill, LineSwatch, rise, stagger, Swap } from "./parts";
 import { periodTitle, type Period } from "./period";
 
@@ -60,8 +61,9 @@ export function ConsumptionInsights({
 }) {
   const [profile, setProfile] = useState<Direction>("consumption");
   const [compare, setCompare] = useState<Direction>("consumption");
-  const title = periodTitle(period, USAGE_SCOPE);
-  const { from, to } = USAGE_SCOPE.data;
+  const scope = usageScope(useAnalysisData());
+  const title = periodTitle(period, scope);
+  const { from, to } = scope.data;
 
   return (
     <motion.div variants={stagger.variants} className="flex flex-col gap-5">
@@ -94,7 +96,7 @@ export function ConsumptionInsights({
       >
         <BalanceChart
           period={period}
-          drill={drillProps(period, USAGE_SCOPE, onChange)}
+          drill={drillProps(period, scope, onChange)}
           className="h-[clamp(220px,32vh,320px)]"
         />
       </InsightCard>

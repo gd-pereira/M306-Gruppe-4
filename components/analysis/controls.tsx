@@ -10,7 +10,7 @@ import { SegmentedTabs } from "@/components/import/table-parts";
 import { formatDay } from "@/components/export/export-data";
 import { cn } from "@/lib/utils";
 import { localParts } from "./chart-axes";
-import { gapMonths, PARTIAL_MONTH } from "./analysis-data";
+import { gapMonths, partialMonth } from "./analysis-data";
 import { useAnalysisData } from "./analysis-source";
 import {
   breadcrumb,
@@ -337,7 +337,9 @@ function MonthGrid({
   const [year, setYear] = useState(Number(period.range.from.slice(0, 4)));
   const [direction, setDirection] = useState(0);
   const current = period.range.from.slice(0, 7);
-  const gaps = gapMonths(useAnalysisData());
+  const data = useAnalysisData();
+  const gaps = gapMonths(data);
+  const partial = partialMonth(data);
 
   function show(next: number) {
     setDirection(Math.sign(next - year));
@@ -382,7 +384,7 @@ function MonthGrid({
               const selected = key === current;
               const mark = gaps.has(key)
                 ? "gap"
-                : markPartial && key === PARTIAL_MONTH
+                : markPartial && key === partial
                   ? "partial"
                   : null;
               return (
@@ -402,7 +404,7 @@ function MonthGrid({
       </div>
       <div className="flex flex-col gap-1 border-t border-muted pt-2 text-[11px] text-muted-foreground">
         <Legend mark="gap">Unvollständiger Monat (SDAT-Lücken)</Legend>
-        {markPartial && (
+        {markPartial && partial && (
           <Legend mark="partial">
             Teilweise: SDAT endet am {formatDay(scope.data.to)}
           </Legend>

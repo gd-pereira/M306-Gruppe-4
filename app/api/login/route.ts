@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, sessionToken } from "@/lib/session";
+import { createSession, SESSION_COOKIE } from "@/lib/session";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest();
 
@@ -20,9 +20,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  // no max-age: the session ends with the browser, a fresh window starts at the login
+  // no max-age: the session ends with the browser, a fresh window starts at the login.
+  // the token itself runs out after SESSION_SECONDS even if the browser stays open
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, await sessionToken(expected), {
+  response.cookies.set(SESSION_COOKIE, await createSession(expected), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

@@ -1,6 +1,5 @@
 import { useImportStore } from "@/components/import/import-store";
-import type { DayRange } from "@/components/export/export-data";
-import { formatDate } from "@/lib/format";
+import { dayOf, type DayRange } from "@/components/export/export-data";
 
 export interface DataSummary {
   fileCount: number;
@@ -12,13 +11,9 @@ export interface DataSummary {
   sdatPeriod: DayRange | null;
 }
 
+// swiss year: 01.01. 00:30 is still the old year in UTC
 function yearOf(ts: number): number {
-  return new Date(ts * 1000).getUTCFullYear();
-}
-
-function dayOf(ts: number): string {
-  const [day, month, year] = formatDate(ts).split(".");
-  return `${year}-${month}-${day}`;
+  return Number(dayOf(ts).slice(0, 4));
 }
 
 // null = nothing imported yet

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fakeAnalysisData } from "./fake-data";
+import { DATA_END, DATA_START, fakeAnalysisData } from "./fake-data";
 import {
   bucketTitle,
   localParts,
@@ -10,15 +10,16 @@ import {
   eslReadings,
   hourProfile,
   isIncomplete,
-  METER_SCOPE,
+  meterScope,
   monthComparison,
   meterLine,
   meterRegions,
+  partialMonth,
   rangeEnd,
   rangeStart,
   sourceSegments,
-  USAGE_SCOPE,
   usageBuckets,
+  usageScope,
   usageRegions,
   usageTotals,
   valueCount,
@@ -38,7 +39,9 @@ import {
   switchLevel,
   type Period,
 } from "@/components/analysis/period";
-import { DATA_END, DATA_START } from "@/components/export/export-data";
+
+const USAGE_SCOPE = usageScope(fakeAnalysisData());
+const METER_SCOPE = meterScope(fakeAnalysisData());
 
 const april: Period = {
   level: "month",
@@ -318,15 +321,46 @@ describe("zählerstand data", () => {
       "Keine SDAT-Daten",
     ]);
     expect(regions[1].to).toBe(rangeEnd(METER_SCOPE.all));
-    expect(sourceSegments(METER_SCOPE.all).map((s) => s.kind)).toEqual([
+    const data = fakeAnalysisData();
+    expect(sourceSegments(METER_SCOPE.all, data).map((s) => s.kind)).toEqual([
       "backcalc",
       "measured",
       "eslOnly",
       "none",
     ]);
-    expect(sourceSegments(april.range).map((s) => s.kind)).toEqual([
+    expect(sourceSegments(april.range, data).map((s) => s.kind)).toEqual([
       "measured",
     ]);
+  });
+
+  it("takes the scopes from the days of the data", () => {
+    expect(USAGE_SCOPE).toEqual({
+      data: { from: DATA_START, to: DATA_END },
+      all: { from: DATA_START, to: DATA_END },
+    });
+    expect(METER_SCOPE).toEqual({
+      data: { from: DATA_START, to: "2022-09-01" },
+      all: { from: DATA_START, to: "2022-12-31" },
+    });
+    expect(partialMonth(fakeAnalysisData())).toBe("2021-09");
+  });
+
+  it("leaves out backcalculation and esl-only without esl around sdat", () => {
+    const data = {
+      ...fakeAnalysisData(),
+      window: {
+        from: DATA_START,
+        to: DATA_END,
+        firstEsl: DATA_START,
+        lastEsl: DATA_END,
+      },
+    };
+    expect(
+      sourceSegments(meterScope(data).all, data).map((s) => s.kind),
+    ).toEqual(["measured", "none"]);
+    expect(
+      meterRegions(meterScope(data).all, data).map((r) => r.label),
+    ).toEqual(["Keine SDAT-Daten"]);
   });
 });
 

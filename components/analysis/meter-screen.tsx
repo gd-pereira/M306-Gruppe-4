@@ -27,12 +27,12 @@ import {
 import { useAnalysisData } from "./analysis-source";
 import {
   eslReadings,
-  METER_SCOPE,
+  meterScope,
   rangeEnd,
   rangeStart,
-  SDAT_END,
+  sdatEnd,
   type AnalysisData,
-  USAGE_SCOPE,
+  usageScope,
 } from "./analysis-data";
 import { MeterChart } from "./meter-chart";
 import {
@@ -44,23 +44,33 @@ import {
   stagger,
   Swap,
 } from "./parts";
-import { intersect, periodParams, periodTitle, type Period } from "./period";
+import {
+  intersect,
+  periodFromParams,
+  periodParams,
+  periodTitle,
+  type Period,
+} from "./period";
 import { SourcesCard } from "./sources-card";
 
 const DESCRIPTION =
   "Absoluter Zählerstand aus den ESL-Ablesungen, dazwischen nach dem SDAT-Verlauf";
 
+type SearchParams = Record<string, string | string[] | undefined>;
+
+// like the verbrauch, the period from the url waits for the imported days
 export function MeterScreen({
-  initial,
+  params,
   sensor,
   back,
 }: {
-  initial: Period;
+  params: SearchParams;
   sensor: SensorId;
   // export url when the page was opened from the export
   back: string | null;
 }) {
   const summary = useDataSummary();
+  const data = useAnalysisData();
   if (!summary) {
     return (
       <>
@@ -69,7 +79,15 @@ export function MeterScreen({
       </>
     );
   }
-  return <MeterView initial={initial} initialSensor={sensor} back={back} />;
+  const scope = meterScope(data);
+  return (
+    <MeterView
+      key={`${scope.data.from}_${scope.data.to}`}
+      initial={periodFromParams(params, scope)}
+      initialSensor={sensor}
+      back={back}
+    />
+  );
 }
 
 const kwh = (value: number) => formatNumber(value, 1);
@@ -100,10 +118,11 @@ function subtitle(
     check.missing.length === 0
   ) {
     text += ` · SDAT ${check.month} ${kwh(check.sdat)} kWh ÷ ${data.ratio.toFixed(2)} = ${kwh(check.eslDiff)} kWh`;
-  } else if (
-    rangeEnd(period.range) > rangeStart({ from: SDAT_END, to: SDAT_END })
-  ) {
-    text += ` · ab ${formatDay(SDAT_END)} nur ESL-Ablesungen`;
+  } else {
+    const end = sdatEnd(data);
+    if (rangeEnd(period.range) > rangeStart({ from: end, to: end })) {
+      text += ` · ab ${formatDay(end)} nur ESL-Ablesungen`;
+    }
   }
   return text;
 }
@@ -120,11 +139,12 @@ function MeterView({
   const { period, direction, change } = usePeriod(initial);
   const [sensor, setSensor] = useState<SensorId>(initialSensor);
   const label = sensorInfo(sensor).label;
-  const exportRange =
-    intersect(period.range, USAGE_SCOPE.data) ?? USAGE_SCOPE.data;
+  const data = useAnalysisData();
+  const scope = meterScope(data);
+  const sdat = usageScope(data).data;
+  const exportRange = intersect(period.range, sdat) ?? sdat;
   const exportHref = `/export?${selectionParams({ format: "csv", sensor, range: exportRange })}`;
   const titled = period.level !== "all" && period.level !== "custom";
-  const data = useAnalysisData();
 
   useEffect(() => {
     const params = new URLSearchParams({ sensor, ...periodParams(period) });
@@ -177,21 +197,17 @@ function MeterView({
               onChange={setSensor}
               options={SENSORS.map((s) => ({ value: s.id, label: s.label }))}
             />
-            <Breadcrumb period={period} scope={METER_SCOPE} onSelect={change} />
+            <Breadcrumb period={period} scope={scope} onSelect={change} />
           </div>
           <div className="flex items-center gap-3">
             <Pager
               period={period}
-              scope={METER_SCOPE}
+              scope={scope}
               direction={direction}
               markPartial={false}
               onChange={change}
             />
-            <LevelToggle
-              period={period}
-              scope={METER_SCOPE}
-              onChange={change}
-            />
+            <LevelToggle period={period} scope={scope} onChange={change} />
           </div>
         </motion.div>
 
@@ -204,7 +220,7 @@ function MeterView({
             <div className="flex min-w-0 flex-col gap-0.5">
               <h2 className="text-[15px] font-semibold">
                 <Swap
-                  value={`Zählerstand ${label}${titled ? ` · ${periodTitle(period, METER_SCOPE)}` : ""}`}
+                  value={`Zählerstand ${label}${titled ? ` · ${periodTitle(period, scope)}` : ""}`}
                 />
               </h2>
               <Swap
@@ -231,7 +247,7 @@ function MeterView({
           <MeterChart
             sensor={sensor}
             period={period}
-            drill={drillProps(period, METER_SCOPE, change)}
+            drill={drillProps(period, scope, change)}
             className="h-[clamp(260px,42vh,400px)]"
           />
         </motion.section>

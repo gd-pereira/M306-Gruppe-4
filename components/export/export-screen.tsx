@@ -15,25 +15,30 @@ import { parseServerUrl, requestTarget, sendExport } from "./api-request";
 import { DateField } from "./date-field";
 import {
   buildFile,
-  DATA_END,
-  DATA_START,
   exportStats,
   formatBytes,
   formatDay,
   isValidRange,
+  windowRange,
+  type DataWindow,
   type DayRange,
   type ExportFormat,
   type ExportSelection,
 } from "./export-data";
-import { useExportSource } from "./export-source";
+import { useDataWindow, useExportSource } from "./export-source";
 import { ModeTiles, RangePresets } from "./form-parts";
 import { PreviewCard } from "./preview-card";
-import { selectionParams, type ExportMode } from "./selection";
+import {
+  modeFromParams,
+  selectionFromParams,
+  selectionParams,
+  type ExportMode,
+} from "./selection";
 import { SensorSelect } from "./sensor-select";
 import { ServerUrlField } from "./server-url-field";
 import { FileAction, SummaryCard } from "./summary-card";
 
-const ALL: DayRange = { from: DATA_START, to: DATA_END };
+type SearchParams = Record<string, string | string[] | undefined>;
 
 const FORMAT_HINT: Record<ExportFormat, string> = {
   csv: "Eine Datei pro Sensor · Spalten timestamp, value · Unix-Zeit in Sekunden (UTC)",
@@ -57,13 +62,32 @@ const swapMode = {
   exit: { opacity: 0, transition: { duration: 0.12 } },
 };
 
-export function ExportScreen({
+// the range from the url can only be checked against the imported days, so the form waits
+// for the data (a reload brings it back from IndexedDB) and starts fresh when other data comes in
+export function ExportScreen({ params }: { params: SearchParams }) {
+  const { result } = useDataStore();
+  const dataWindow = useDataWindow();
+  if (!result) return null;
+  return (
+    <ExportForm
+      key={`${dataWindow.from}_${dataWindow.to}`}
+      initial={selectionFromParams(params, dataWindow)}
+      initialMode={modeFromParams(params)}
+      dataWindow={dataWindow}
+    />
+  );
+}
+
+function ExportForm({
   initial,
   initialMode,
+  dataWindow,
 }: {
   initial: ExportSelection;
   initialMode: ExportMode;
+  dataWindow: DataWindow;
 }) {
+  const all = windowRange(dataWindow);
   const [mode, setMode] = useState<ExportMode>(initialMode);
   const [fileFormat, setFileFormat] = useState<ExportFormat>(initial.format);
   const [sensor, setSensor] = useState<SensorId>(initial.sensor);
@@ -80,8 +104,12 @@ export function ExportScreen({
   const valid = isValidRange(range);
   // an invalid range still shows the whole period, dimmed
   const selection = useMemo<ExportSelection>(
-    () => ({ format, sensor, range: valid ? range : ALL }),
-    [format, sensor, range, valid],
+    () => ({
+      format,
+      sensor,
+      range: valid ? range : { from: dataWindow.from, to: dataWindow.to },
+    }),
+    [format, sensor, range, valid, dataWindow],
   );
   // real meter readings after an import, the demo curve before
   const source = useExportSource();
@@ -119,7 +147,7 @@ export function ExportScreen({
   }
 
   async function download() {
-    if (!valid || downloading || waiting) return;
+    if (!valid || stats.values === 0 || downloading || waiting) return;
     setDownloading(true);
     const current = { selection, stats, source };
     try {
@@ -151,7 +179,7 @@ export function ExportScreen({
 
   async function send() {
     setUrlTouched(true);
-    if (!server || !valid || sending || waiting) return;
+    if (!server || !valid || stats.values === 0 || sending || waiting) return;
     const controller = new AbortController();
     request.current = controller;
     const sent = {
@@ -164,7 +192,15 @@ export function ExportScreen({
       const result = await sendExport(server, range, controller.signal, source);
       setApiState({ kind: "done", result, ...sent });
     } catch {
-      // cancelled because the page was left
+      // cancelled because the page was left, nothing to show
+      if (controller.signal.aborted) return;
+      // building the body failed, the button must not stay on «Sendet …»
+      setApiState({ kind: "idle" });
+      toast({
+        icon: <CircleAlert />,
+        title: "Senden fehlgeschlagen",
+        description: "Die Daten konnten nicht vorbereitet werden.",
+      });
     }
   }
 
@@ -270,8 +306,8 @@ export function ExportScreen({
                   <DateField
                     label="Von"
                     value={range.from}
-                    min={DATA_START}
-                    max={DATA_END}
+                    min={all.from}
+                    max={all.to}
                     onChange={(from) =>
                       changeRange((prev) => ({ ...prev, from }))
                     }
@@ -280,8 +316,8 @@ export function ExportScreen({
                   <DateField
                     label="Bis"
                     value={range.to}
-                    min={DATA_START}
-                    max={DATA_END}
+                    min={all.from}
+                    max={all.to}
                     invalid={!valid}
                     onChange={(to) => changeRange((prev) => ({ ...prev, to }))}
                   />
@@ -306,6 +342,7 @@ export function ExportScreen({
                 </AnimatePresence>
                 <RangePresets
                   range={range}
+                  dataWindow={dataWindow}
                   onSelect={(next) => changeRange(() => next)}
                 />
               </div>

@@ -10,6 +10,7 @@ import {
   type ExportSeries,
 } from "@/lib/export";
 import { formatNumber } from "@/lib/format";
+import type { ImportResult } from "@/lib/import";
 import { zurichToUnix } from "@/lib/time";
 import { SENSOR_IDS, type Direction, type SensorId } from "@/lib/types";
 
@@ -25,10 +26,67 @@ export interface DayRange {
 }
 export type { ExportFormat };
 
-export const DATA_START: DayKey = "2018-01-01";
-export const DATA_END: DayKey = "2021-09-06";
-// 2018 is calculated backwards from the first esl reading on 01.01.2019
-export const BACKCALC_END: DayKey = "2018-12-31";
+// the days the imported data covers, every range, preset and label comes from it
+export interface DataWindow {
+  // first and last day with sdat values
+  from: DayKey;
+  to: DayKey;
+  // first and last esl reading, null without esl files
+  firstEsl: DayKey | null;
+  lastEsl: DayKey | null;
+}
+
+// before the first import, the screens only show their empty state then
+export const EMPTY_WINDOW: DataWindow = {
+  from: "1970-01-01",
+  to: "1970-01-01",
+  firstEsl: null,
+  lastEsl: null,
+};
+
+const windows = new WeakMap<ImportResult, DataWindow>();
+
+export function dataWindow(result: ImportResult): DataWindow {
+  const cached = windows.get(result);
+  if (cached) return cached;
+  let first = Infinity;
+  let last = -Infinity;
+  let eslFirst = Infinity;
+  let eslLast = -Infinity;
+  for (const direction of ["consumption", "feedIn"] as const) {
+    // the usage ts is the start of the interval, so the last one lies on the last day
+    const usage = result[direction].usage["15min"];
+    if (usage.length > 0) {
+      first = Math.min(first, usage[0].ts);
+      last = Math.max(last, usage[usage.length - 1].ts);
+    }
+    const esl = result[direction].esl;
+    if (esl.length > 0) {
+      eslFirst = Math.min(eslFirst, esl[0].ts);
+      eslLast = Math.max(eslLast, esl[esl.length - 1].ts);
+    }
+  }
+  const firstEsl = eslFirst === Infinity ? null : dayOf(eslFirst);
+  const lastEsl = eslLast === -Infinity ? null : dayOf(eslLast);
+  // without sdat the esl readings span the window
+  const from =
+    first === Infinity ? (firstEsl ?? EMPTY_WINDOW.from) : dayOf(first);
+  const to = last === -Infinity ? (lastEsl ?? from) : dayOf(last);
+  const window = { from, to, firstEsl, lastEsl };
+  windows.set(result, window);
+  return window;
+}
+
+export function windowRange(window: DataWindow): DayRange {
+  return { from: window.from, to: window.to };
+}
+
+// last day that is calculated backwards from the first esl reading, null when sdat starts with esl
+export function backcalcEnd(window: DataWindow): DayKey | null {
+  return window.firstEsl && window.firstEsl > window.from
+    ? addDays(window.firstEsl, -1)
+    : null;
+}
 
 export interface SensorInfo {
   id: SensorId;
@@ -122,29 +180,44 @@ export interface RangePreset {
   range: DayRange;
 }
 
-export const PRESETS: RangePreset[] = [
-  { id: "all", label: "Alles", range: { from: DATA_START, to: DATA_END } },
-  { id: "2021", label: "2021", range: { from: "2021-01-01", to: DATA_END } },
-  {
-    id: "2020",
-    label: "2020",
-    range: { from: "2020-01-01", to: "2020-12-31" },
-  },
-  {
-    id: "2019",
-    label: "2019",
-    range: { from: "2019-01-01", to: "2019-12-31" },
-  },
-  { id: "2018", label: "2018", range: { from: DATA_START, to: "2018-12-31" } },
-  {
-    id: "30d",
-    label: "Letzte 30 Tage",
-    range: { from: addDays(DATA_END, -29), to: DATA_END },
-  },
-];
+// more year buttons would not fit next to the others
+const PRESET_YEARS = 4;
 
-export function presetFor(range: DayRange): RangePreset | undefined {
-  return PRESETS.find(
+const later = (a: DayKey, b: DayKey) => (a > b ? a : b);
+const earlier = (a: DayKey, b: DayKey) => (a < b ? a : b);
+
+// «Alles», the newest years cut to the data and the last 30 days
+export function presets(window: DataWindow): RangePreset[] {
+  const { from, to } = window;
+  const years: RangePreset[] = [];
+  const first = Number(from.slice(0, 4));
+  const last = Number(to.slice(0, 4));
+  for (let year = last; year >= first && years.length < PRESET_YEARS; year--) {
+    years.push({
+      id: String(year),
+      label: String(year),
+      range: {
+        from: later(`${year}-01-01`, from),
+        to: earlier(`${year}-12-31`, to),
+      },
+    });
+  }
+  return [
+    { id: "all", label: "Alles", range: { from, to } },
+    ...years,
+    {
+      id: "30d",
+      label: "Letzte 30 Tage",
+      range: { from: later(addDays(to, -29), from), to },
+    },
+  ];
+}
+
+export function presetFor(
+  range: DayRange,
+  list: RangePreset[],
+): RangePreset | undefined {
+  return list.find(
     (preset) =>
       preset.range.from === range.from && preset.range.to === range.to,
   );

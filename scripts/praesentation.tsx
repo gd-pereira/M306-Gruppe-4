@@ -1016,7 +1016,7 @@ const folien = [
         items={[
           "Web Worker hält die Oberfläche beim Import bedienbar",
           "Parser werfen nie: defekte Dateien landen in der Fehlerliste",
-          "Next.js 16, React 19, TypeScript, Tailwind CSS, bklit-Diagramme auf visx",
+          "Next.js 16, React 19, TypeScript, Tailwind CSS, SVG-Diagramme mit d3-shape",
           "Standards: ESLint, Prettier, automatisierte Tests mit Vitest",
         ]}
       />
@@ -1168,8 +1168,8 @@ const folien = [
       }
     >
       <Kennzahl
-        wert="223"
-        label="automatisierte Tests in 19 Dateien, alle grün (Stand 01.10.2026)"
+        wert="240"
+        label="automatisierte Tests in 21 Dateien, alle grün (Stand 01.10.2026)"
         x={6.65}
         y={OBEN + 0.2}
         w={2.6}

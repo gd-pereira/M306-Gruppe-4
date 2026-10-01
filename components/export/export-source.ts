@@ -3,7 +3,12 @@ import { getDataState, useDataStore } from "@/lib/data-store";
 import { exportSeries } from "@/lib/export";
 import type { ImportResult } from "@/lib/import";
 import { SENSOR_IDS, type SensorId } from "@/lib/types";
-import type { ExportSource } from "./export-data";
+import {
+  dataWindow,
+  EMPTY_WINDOW,
+  type DataWindow,
+  type ExportSource,
+} from "./export-data";
 
 // where the export takes its meter readings from: the imported data, empty series before
 // the first import. uses the store, so only for client components
@@ -34,4 +39,10 @@ export function exportSource(
 export function useExportSource(): ExportSource {
   const { result } = useDataStore();
   return useMemo(() => exportSource(result), [result]);
+}
+
+// the days of the imported data, EMPTY_WINDOW before the first import
+export function useDataWindow(): DataWindow {
+  const { result } = useDataStore();
+  return result ? dataWindow(result) : EMPTY_WINDOW;
 }

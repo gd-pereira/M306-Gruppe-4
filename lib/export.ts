@@ -40,8 +40,8 @@ export interface ExportSummary {
 
 // excel on swiss and german windows expects ";" and puts a plain comma csv into one column,
 // this first line tells excel the separator (decided by the team, tested with excel 16 de-CH)
-export const CSV_SEPARATOR_HINT = "sep=,";
-export const CSV_HEADER = "timestamp,value";
+const CSV_SEPARATOR_HINT = "sep=,";
+const CSV_HEADER = "timestamp,value";
 
 const DIRECTIONS: Direction[] = ["consumption", "feedIn"];
 
@@ -90,11 +90,11 @@ export function gapsInRange(gaps: Gap[], from: number, to: number): Gap[] {
 }
 
 // up to 4 decimals like everywhere in lib (roundKwh), without trailing zeros: 3569.9573, 100.25, 100
-export function formatValue(value: number): string {
+function formatValue(value: number): string {
   return String(roundKwh(value));
 }
 
-export function csvLine(point: DataPoint): string {
+function csvLine(point: DataPoint): string {
   return `${point.ts},${formatValue(point.value)}`;
 }
 
@@ -103,7 +103,7 @@ export function jsonValue(point: DataPoint): string {
   return `{"ts":"${point.ts}","value":${formatValue(point.value)}}`;
 }
 
-export function jsonHead(sensorId: SensorId): string {
+function jsonHead(sensorId: SensorId): string {
   return `{"sensorId":"${sensorId}","data":[`;
 }
 
@@ -112,7 +112,7 @@ export function fileName(format: ExportFormat, sensorId: SensorId): string {
   return format === "csv" ? `${sensorId}.csv` : "zaehlerstaende.json";
 }
 
-export function mimeType(format: ExportFormat): string {
+function mimeType(format: ExportFormat): string {
   return format === "csv" ? "text/csv;charset=utf-8" : "application/json";
 }
 

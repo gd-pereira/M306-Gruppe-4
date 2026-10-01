@@ -26,7 +26,8 @@ import { useAnalysisData } from "@/components/analysis/analysis-source";
 import type { Drill } from "@/components/analysis/controls";
 import {
   eslReadings,
-  USAGE_SCOPE,
+  partialMonth,
+  usageScope,
   usageTotals,
   valueCount,
   yearTotals,
@@ -40,11 +41,11 @@ import {
   rise,
   stagger,
 } from "@/components/analysis/parts";
-import { useDataSummary } from "@/components/app-shell/use-data-summary";
 import {
   intersect,
   periodOf,
   periodParams,
+  type Scope,
 } from "@/components/analysis/period";
 import {
   daysBetween,
@@ -57,8 +58,6 @@ import { EASE_OUT } from "@/components/motion-provider";
 import { buttonVariants } from "@/components/ui/button";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-const ALL = periodOf("all", USAGE_SCOPE.data.to, USAGE_SCOPE);
 
 const importButton = (
   <Link
@@ -99,8 +98,8 @@ export function DashboardScreen() {
   );
 }
 
-const monthHref = (day: string) =>
-  `/verbrauch?${new URLSearchParams(periodParams(periodOf("month", day, USAGE_SCOPE)))}`;
+const monthHref = (day: string, scope: Scope) =>
+  `/verbrauch?${new URLSearchParams(periodParams(periodOf("month", day, scope)))}`;
 
 const yearHref = (year: number) =>
   `/verbrauch?${new URLSearchParams({ von: `${year}-01-01`, bis: `${year}-12-31` })}`;
@@ -129,19 +128,12 @@ function DashboardView({
     consumption: true,
     feedIn: true,
   });
-  const sdatPeriod = useDataSummary()?.sdatPeriod;
-  const sdatFrom = sdatPeriod?.from;
-  const sdatTo = sdatPeriod?.to;
-  // the whole sdat period, the charts only cover the sample data years
-  const data = useMemo(
-    () =>
-      (sdatFrom &&
-        sdatTo &&
-        intersect({ from: sdatFrom, to: sdatTo }, USAGE_SCOPE.data)) ||
-      USAGE_SCOPE.data,
-    [sdatFrom, sdatTo],
-  );
   const analysis = useAnalysisData();
+  // the whole sdat period of the import
+  const scope = usageScope(analysis);
+  const data = scope.data;
+  const all = useMemo(() => periodOf("all", scope.data.to, scope), [scope]);
+  const partial = partialMonth(analysis);
   const totals = useMemo(() => usageTotals(data, analysis), [data, analysis]);
   const years = useMemo(
     () =>
@@ -163,7 +155,7 @@ function DashboardView({
 
   const drill: Drill = {
     selectHint: "Klicken öffnet den Verbrauch",
-    onSelect: (ts) => router.push(monthHref(localParts(ts).day)),
+    onSelect: (ts) => router.push(monthHref(localParts(ts).day, scope)),
   };
 
   return (
@@ -218,7 +210,7 @@ function DashboardView({
               <div className="flex items-start justify-between gap-3">
                 <CardTitle
                   title="Monatswerte"
-                  sub="kWh pro Monat · angebrochener Monat 09/2021 ausgeblendet"
+                  sub={`kWh pro Monat${partial ? ` · angebrochener Monat ${partial.slice(5, 7)}/${partial.slice(0, 4)} ausgeblendet` : ""}`}
                 />
                 <div className="flex shrink-0 items-center gap-2">
                   {SERIES.map((series) => {
@@ -256,7 +248,7 @@ function DashboardView({
                 </div>
               </div>
               <ConsumptionChart
-                period={ALL}
+                period={all}
                 visible={visible}
                 drill={drill}
                 markGaps

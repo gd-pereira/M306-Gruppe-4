@@ -7,15 +7,6 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   prettier,
-  {
-    // bklit chart components from the shadcn registry
-    files: ["components/charts/**"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "react-hooks/refs": "off",
-      "react-hooks/set-state-in-effect": "off",
-    },
-  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

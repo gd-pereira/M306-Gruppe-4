@@ -25,8 +25,8 @@ import { useAnalysisData } from "./analysis-source";
 import {
   rangeEnd,
   rangeStart,
-  USAGE_SCOPE,
   usageBuckets,
+  usageScope,
   usageTotals,
   type UsageBucket,
 } from "./analysis-data";
@@ -42,7 +42,6 @@ import {
 } from "./period";
 
 const HEIGHT = 44;
-const YEARS = [2018, 2019, 2020, 2021];
 
 type Mode = "move" | "start" | "end" | "new";
 
@@ -78,6 +77,15 @@ function selectionLabel(period: Period): string {
 const sameRange = (a: DayRange, b: DayRange) =>
   a.from === b.from && a.to === b.to;
 
+function yearsOf(range: DayRange): number[] {
+  const list: number[] = [];
+  const last = Number(range.to.slice(0, 4));
+  for (let year = Number(range.from.slice(0, 4)); year <= last; year++) {
+    list.push(year);
+  }
+  return list;
+}
+
 // the whole period as a strip: drag the window, pull its handles or draw a new one
 export function Brush({
   period,
@@ -87,11 +95,13 @@ export function Brush({
   onChange: (period: Period) => void;
 }) {
   const [ref, { width }] = useElementSize<HTMLDivElement>();
-  const { data, all } = USAGE_SCOPE;
   const analysis = useAnalysisData();
+  const scope = usageScope(analysis);
+  const { data, all } = scope;
+  const years = useMemo(() => yearsOf(usageScope(analysis).all), [analysis]);
   const months = useMemo(
-    () => usageBuckets(all, "month", analysis),
-    [all, analysis],
+    () => usageBuckets(usageScope(analysis).all, "month", analysis),
+    [analysis],
   );
   const t0 = rangeStart(all);
   const t1 = rangeEnd(all);
@@ -135,7 +145,7 @@ export function Brush({
   const center = windowX + windowWidth / 2;
   const showPill = draft !== null || period.level !== "all";
   const pillLabel = draft
-    ? selectionLabel(periodFromRange(draft, USAGE_SCOPE))
+    ? selectionLabel(periodFromRange(draft, scope))
     : selectionLabel(period);
   const pillX = Math.min(Math.max(center, 44), width - 44);
   const instant = { duration: 0 };
@@ -211,7 +221,7 @@ export function Brush({
     if (!d) return;
     if (d.moved) {
       if (draft && !sameRange(draft, current)) {
-        onChange(periodFromRange(draft, USAGE_SCOPE));
+        onChange(periodFromRange(draft, scope));
       }
     } else if (d.mode === "new") {
       onChange(click(d.anchor));
@@ -223,8 +233,8 @@ export function Brush({
   // a click keeps the level: in «April 2021» a click in 2019 opens that month, from «Alles» the year
   function click(day: DayKey): Period {
     const { level } = period;
-    if (level === "all") return periodOf("year", day, USAGE_SCOPE);
-    if (level !== "custom") return periodOf(level, day, USAGE_SCOPE);
+    if (level === "all") return periodOf("year", day, scope);
+    if (level !== "custom") return periodOf(level, day, scope);
     const half = Math.floor(daysBetween(current.from, current.to) / 2);
     const from = addDays(day, -half);
     const shift = Math.min(
@@ -233,7 +243,7 @@ export function Brush({
     );
     return periodFromRange(
       { from: addDays(from, shift), to: addDays(from, half * 2 + shift) },
-      USAGE_SCOPE,
+      scope,
     );
   }
 
@@ -242,7 +252,7 @@ export function Brush({
       event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
     if (!direction) return;
     event.preventDefault();
-    const next = shiftPeriod(period, direction, USAGE_SCOPE);
+    const next = shiftPeriod(period, direction, scope);
     if (next) onChange(next);
   }
 
@@ -291,7 +301,7 @@ export function Brush({
           {period.level !== "all" && (
             <motion.button
               type="button"
-              onClick={() => onChange(periodOf("all", data.from, USAGE_SCOPE))}
+              onClick={() => onChange(periodOf("all", data.from, scope))}
               className="flex shrink-0 items-center gap-1 rounded text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -338,7 +348,7 @@ export function Brush({
                 strokeWidth={1}
               />
             )}
-            {YEARS.slice(1).map((year) => (
+            {years.slice(1).map((year) => (
               <line
                 key={year}
                 x1={yearX(year)}
@@ -442,8 +452,10 @@ export function Brush({
 
       <div className="relative h-5 text-[11px] text-faint" aria-hidden>
         {width > 0 &&
-          YEARS.map((year) => {
-            const labelX = (yearX(year) + Math.min(width, yearX(year + 1))) / 2;
+          years.map((year) => {
+            // the first and last year can start or end inside the strip
+            const labelX =
+              (Math.max(0, yearX(year)) + Math.min(width, yearX(year + 1))) / 2;
             const hidden = showPill && Math.abs(labelX - pillX) < 56;
             return (
               <motion.span

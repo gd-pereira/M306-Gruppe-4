@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { bucketAt, type ZoomLevel } from "@/lib/aggregate";
 import type { ImportResult } from "@/lib/import";
 import { loadData, saveData } from "@/lib/saved-data";
@@ -85,7 +85,7 @@ export function useDataStore(): DataState {
 
 // from the first to 15 min after the last value, over both directions
 // meter readings are not needed here, after aggregating they have the same ts as the usage
-export function dataBounds(result: ImportResult): TimeRange | null {
+function dataBounds(result: ImportResult): TimeRange | null {
   let from = Infinity;
   let to = -Infinity;
 
@@ -247,16 +247,4 @@ export function getRangeData(level: ZoomLevel): RangeData | null {
     return null;
   }
   return rangeData(result, range, level);
-}
-
-// react hook version of getRangeData, only recalculates when data, range or level change
-export function useRangeData(level: ZoomLevel): RangeData | null {
-  const { result, range } = useDataStore();
-
-  return useMemo(() => {
-    if (result === null || range === null) {
-      return null;
-    }
-    return rangeData(result, range, level);
-  }, [result, range, level]);
 }

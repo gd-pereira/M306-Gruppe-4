@@ -14,6 +14,7 @@ import { AnimatedNumber } from "./hooks";
 import {
   ActionBar,
   ActionButton,
+  EMPTY_DETAIL,
   periodOf,
   WAITING_DETAIL,
   WAITING_TITLE,
@@ -53,12 +54,13 @@ export function ApiAction({
 }) {
   const sending = state.kind === "sending";
   const failed = state.kind === "done" && state.result.kind !== "sent";
-  const ready = valid && url === "ok" && !waiting;
+  const empty = valid && stats.values === 0;
+  const ready = valid && !empty && url === "ok" && !waiting;
 
   const bar = waiting
     ? { key: "waiting", title: WAITING_TITLE }
-    : !valid
-      ? { key: "range", title: "Nichts zu senden" }
+    : !valid || empty
+      ? { key: empty ? "empty" : "range", title: "Nichts zu senden" }
       : sending
         ? { key: "sending", title: `Wird an ${state.host} gesendet …` }
         : url === "empty"
@@ -78,6 +80,8 @@ export function ApiAction({
         detail={
           waiting ? (
             WAITING_DETAIL
+          ) : empty ? (
+            EMPTY_DETAIL
           ) : valid ? (
             <>
               <AnimatedNumber value={stats.values} /> Werte ·{" "}

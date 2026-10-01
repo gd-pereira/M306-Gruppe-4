@@ -85,11 +85,11 @@
 * **Sprecher:** Gonçalo Pereira
 * **Zielzeit:** `0:45 min` (bis `03:45`)
 * **Kriterium 4.1 & 4.2 (Nutzwertanalyse & Standards):**
-  - **Stack:** Next.js 16.3, React 19, TypeScript 5, Tailwind CSS 4, shadcn/ui und Visx/Motion.
+  - **Stack:** Next.js 16.3, React 19, TypeScript 5, Tailwind CSS 4, shadcn/ui, Diagramme als SVG mit d3-shape und Motion.
   - **Architektur-Entscheid (Gamechanger):** 
-    - **100% Client-Side In-Browser Execution.**
-    - Warum? Verbrauchsdaten sind hochsensibel (Rückschlüsse auf Anwesenheiten). Bei Flux verlässt kein einziges Byte den Browser!
-    - Null Serverkosten, kein Upload-Verzug, vollständige DSGVO/nDSG-Konformität.
+    - **Die Messdaten werden im Browser verarbeitet.** Der Server prüft nur das Passwort (Login) und stellt die Seiten aus.
+    - Warum? Verbrauchsdaten sind hochsensibel (Rückschlüsse auf Anwesenheiten). Die Dateien werden nicht hochgeladen, sondern im Browser eingelesen und in IndexedDB gespeichert.
+    - Daten verlassen den Browser nur, wenn man sie beim Export bewusst mit «An API senden» verschickt.
 * **Übergabe:** «Elias zeigt nun, wie sich die beiden Datenformate unterscheiden.»
 
 ---
@@ -114,7 +114,7 @@
   4. Deduplizierung: Neuestes Erstelldatum gewinnt bei Überlappungen.
   5. Zählerstände vorwärts & rückwärts addieren/subtrahieren.
   6. Konsistenzprüfung & Lückenerkennung.
-  7. Zoomstufen (15m, 1h, 1d, 1w, 1m) werden einmalig im RAM vorberechnet.
+  7. Zoomstufen (15m, 1h, 1d, 1w, 1m) werden einmalig vorberechnet, das Ergebnis bleibt in IndexedDB gespeichert.
 
 ---
 
@@ -144,7 +144,7 @@
 * **Zielzeit:** `4:45 min` (bis `12:15` — **ACHTUNG: Kriterium 2.8: Max. 5 Minuten!**)
 * **Demo-Ablauf:**
   1. **Import (ca. 1 Min):** Dateien per Drag & Drop reinziehen, Web-Worker-Fortschrittsbalken zeigen, Dateitabelle erläutern (Deduplizierung & ignorierte Files).
-  2. **Dashboard (ca. 1 Min):** Kennzahlen präsentieren: Solarquote, Einspeisung vs. Bezug, Monats-Tooltips.
+  2. **Dashboard (ca. 1 Min):** Kennzahlen präsentieren: Bezug, Einspeisung, Spitzenwert und Netto, Monats-Tooltips.
   3. **Verbrauch & Zählerstand (ca. 1.5 Min):** Stufenloses Zoomen demonstrieren: Von der Jahresansicht 2020 über Tage bis zu einzelnen 15-Minuten-Balken. ESL-Vergleichspunkte und Lücken zeigen.
   4. **Export (ca. 1 Min):** CSV- und JSON-Dateien herunterladen, Formatierung (UTC Timestamp + Wert) im Editor kurz zeigen.
 
@@ -154,7 +154,7 @@
 * **Sprecher:** Gonçalo Pereira
 * **Zielzeit:** `1:00 min` (bis `13:15`)
 * **Hard Facts (Kriterium 4.3):**
-  - **179 Unit- & Integrationstests in 16 Suiten — alle 100% grün!**
+  - **240 Unit- & Integrationstests in 21 Testdateien — alle grün!**
   - ~44 Sekunden Importzeit für den Gesamtdatensatz (5'180 Dateien).
   - 31'644 Duplikate und 128'888 Platzhalter fehlerfrei bereinigt.
   - 128'060 berechnete Datenpunkte pro Richtung.
@@ -168,7 +168,7 @@
 * **Pflichtenheft-Abgleich:**
   - Alle 6 Muss-Kriterien zu 100% erfüllt und durch automatisierte Tests verifiziert.
   - Wunschkriterium JSON-Export vollständig umgesetzt.
-  - Wunschkriterium HTTP POST Upload architektonisch implementiert und vorbereitet.
+  - Wunschkriterium HTTP POST umgesetzt: «An API senden» schickt das JSON an eine frei wählbare URL, mit Testserver unter `/api/zaehlerstaende`.
 
 ---
 
@@ -186,7 +186,6 @@
 * **Sprecher:** Paul Kühn
 * **Zielzeit:** `0:15 min` (bis `14:45`)
 * **Zukunftsvision:**
-  - Lokale IndexedDB-Persistenz (kein Neu-Import nach Browser-Neustart).
   - Prognosemodelle für Photovoltaik-Ertrag.
   - Direkte B2B-Schnittstelle zu Schweizer Stromnetzbetreibern.
 

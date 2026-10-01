@@ -18,13 +18,12 @@ import { shortRange } from "./chart-axes";
 import { useAnalysisData } from "./analysis-source";
 import {
   eslReadings,
-  FIRST_ESL,
   gapDays,
   gapMarks,
   gapsIn,
   rangeEnd,
   rangeStart,
-  SDAT_END,
+  sdatEnd,
   sourceSegments,
   type SourceKind,
 } from "./analysis-data";
@@ -78,7 +77,7 @@ export function SourcesCard({
   const { range } = period;
   const [barRef, { width }] = useElementSize<HTMLDivElement>();
   const data = useAnalysisData();
-  const segments = useMemo(() => sourceSegments(range), [range]);
+  const segments = useMemo(() => sourceSegments(range, data), [range, data]);
   const gaps = useMemo(() => gapsIn(range, data), [range, data]);
   const esl = eslReadings(sensor, data);
   const long = daysBetween(range.from, range.to) > 400;
@@ -148,11 +147,14 @@ export function SourcesCard({
   const has = (kind: SourceKind) =>
     segments.find((segment) => segment.kind === kind);
   const items: Item[] = [];
-  if (has("backcalc")) {
+  const backcalc = has("backcalc");
+  // a backcalc segment only exists when there is a first esl reading
+  const firstReading = esl[0];
+  if (backcalc && firstReading) {
     items.push({
       swatch: "border border-border-strong bg-[#ffe7a8]",
-      title: "Zurückgerechnet · 2018",
-      text: `Ab der ersten ESL-Ablesung ${formatNumber(esl[0].value, 1)} kWh (${formatDay(FIRST_ESL)}) rückwärts mit SDAT ÷ ${data.ratio.toFixed(2)}`,
+      title: `Zurückgerechnet · ${formatDayRange(backcalc.range)}`,
+      text: `Ab der ersten ESL-Ablesung ${formatNumber(firstReading.value, 1)} kWh (${formatDay(firstReading.day)}) rückwärts mit SDAT ÷ ${data.ratio.toFixed(2)}`,
     });
   }
   const measured = has("measured");
@@ -185,12 +187,12 @@ export function SourcesCard({
       text: "In diesem Zeitraum fehlen keine SDAT-Werte",
     });
   }
-  if (has("eslOnly")) {
-    const last =
-      esl.findLast((reading) => reading.ts <= t1) ?? esl[esl.length - 1];
+  const last =
+    esl.findLast((reading) => reading.ts <= t1) ?? esl[esl.length - 1];
+  if (has("eslOnly") && last) {
     items.push({
       swatch: "border border-border-strong bg-border",
-      title: `Nur ESL · ab ${formatDay(SDAT_END)}`,
+      title: `Nur ESL · ab ${formatDay(sdatEnd(data))}`,
       text: `Keine SDAT-Daten mehr, die gestrichelte Linie verbindet die Ablesungen bis ${formatNumber(last.value, 1)} kWh`,
     });
   }

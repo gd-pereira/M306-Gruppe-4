@@ -63,10 +63,6 @@ export async function loadData<T>(key: SavedKey): Promise<T | null> {
     null) as T | null;
 }
 
-export async function deleteData(key: SavedKey): Promise<void> {
-  await withStore("readwrite", (store) => store.delete(key));
-}
-
 export async function clearSavedData(): Promise<void> {
   await withStore("readwrite", (store) => store.clear());
 }

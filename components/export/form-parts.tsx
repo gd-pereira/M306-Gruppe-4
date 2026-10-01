@@ -2,9 +2,14 @@
 
 import { Download, Send, type LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useId, useRef, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
-import { PRESETS, presetFor, type DayRange } from "./export-data";
+import {
+  presetFor,
+  presets,
+  type DataWindow,
+  type DayRange,
+} from "./export-data";
 import type { ExportMode } from "./selection";
 
 const MODES = [
@@ -127,12 +132,15 @@ export function ModeTiles({
 
 export function RangePresets({
   range,
+  dataWindow,
   onSelect,
 }: {
   range: DayRange;
+  dataWindow: DataWindow;
   onSelect: (range: DayRange) => void;
 }) {
-  const active = presetFor(range)?.id;
+  const list = useMemo(() => presets(dataWindow), [dataWindow]);
+  const active = presetFor(range, list)?.id;
   const pillId = useId();
   return (
     <div
@@ -140,7 +148,7 @@ export function RangePresets({
       aria-label="Schnellwahl Zeitraum"
       className="flex flex-wrap gap-1.5"
     >
-      {PRESETS.map((preset) => {
+      {list.map((preset) => {
         const selected = preset.id === active;
         return (
           <button

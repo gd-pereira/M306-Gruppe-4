@@ -252,6 +252,8 @@ export function ActionButton({
 export const WAITING_TITLE = "Daten werden noch eingelesen …";
 export const WAITING_DETAIL =
   "Export ist möglich, sobald der Import fertig ist";
+// a range without any reading, e.g. only gap days or after the end of the data
+export const EMPTY_DETAIL = "Keine Zählerstände im gewählten Zeitraum";
 
 export function FileAction({
   selection,
@@ -271,16 +273,25 @@ export function FileAction({
 }) {
   const reading = stats.readings[selection.sensor];
   const period = periodOf(selection);
+  const empty = valid && stats.values === 0;
   return (
     <ActionBar
-      swapKey={waiting ? "waiting" : valid ? "file" : "none"}
-      title={waiting ? WAITING_TITLE : valid ? stats.fileName : "Keine Datei"}
-      size={valid && !waiting ? formatBytes(stats.bytes) : undefined}
-      idle={!valid || waiting}
+      swapKey={waiting ? "waiting" : empty ? "empty" : valid ? "file" : "none"}
+      title={
+        waiting
+          ? WAITING_TITLE
+          : valid && !empty
+            ? stats.fileName
+            : "Keine Datei"
+      }
+      size={valid && !empty && !waiting ? formatBytes(stats.bytes) : undefined}
+      idle={!valid || empty || waiting}
       danger={!valid && !waiting}
       detail={
         waiting ? (
           WAITING_DETAIL
+        ) : empty ? (
+          EMPTY_DETAIL
         ) : valid ? (
           <>
             <AnimatedNumber value={stats.values} /> Werte ·{" "}
@@ -303,7 +314,7 @@ export function FileAction({
       <ActionButton
         icon={Download}
         busy={downloading}
-        disabled={!valid || waiting}
+        disabled={!valid || empty || waiting}
         onClick={onDownload}
       >
         Herunterladen

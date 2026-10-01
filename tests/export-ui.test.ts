@@ -1,20 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { fakeExportSource } from "./fake-data";
 import {
-  axisLabels,
-  buildFile,
   DATA_END,
   DATA_START,
+  FAKE_WINDOW,
+  fakeExportSource,
+} from "./fake-data";
+import {
+  axisLabels,
+  backcalcEnd,
+  buildFile,
   exportStats,
   formatBytes,
   formatDayRange,
   isDayKey,
+  presetFor,
+  presets,
   preview,
-  PRESETS,
   yTicks,
   type ExportSelection,
 } from "@/components/export/export-data";
 import {
+  exportBackHref,
   meterHref,
   selectionFromParams,
   selectionParams,
@@ -119,11 +125,14 @@ describe("file content", () => {
 describe("url parameters", () => {
   it("reads the parameters of the zählerstand link", () => {
     expect(
-      selectionFromParams({
-        sensor: "ID735",
-        von: "2019-01-01",
-        bis: "2019-12-31",
-      }),
+      selectionFromParams(
+        {
+          sensor: "ID735",
+          von: "2019-01-01",
+          bis: "2019-12-31",
+        },
+        FAKE_WINDOW,
+      ),
     ).toEqual({
       format: "csv",
       sensor: "ID735",
@@ -133,12 +142,15 @@ describe("url parameters", () => {
 
   it("falls back to the defaults and clamps to the data range", () => {
     expect(
-      selectionFromParams({
-        sensor: "ID26256",
-        von: "2010-05-05",
-        bis: "kaputt",
-        format: "json",
-      }),
+      selectionFromParams(
+        {
+          sensor: "ID26256",
+          von: "2010-05-05",
+          bis: "kaputt",
+          format: "json",
+        },
+        FAKE_WINDOW,
+      ),
     ).toEqual({
       format: "json",
       sensor: "ID742",
@@ -146,12 +158,35 @@ describe("url parameters", () => {
     });
   });
 
+  it("clamps to the days of a smaller import", () => {
+    const window = { ...FAKE_WINDOW, from: "2020-01-01", to: "2020-12-31" };
+    expect(
+      selectionFromParams({ von: "2019-01-01", bis: "2021-06-30" }, window)
+        .range,
+    ).toEqual({ from: "2020-01-01", to: "2020-12-31" });
+  });
+
+  it("passes the export settings back from the zählerstand unchanged", () => {
+    expect(
+      exportBackHref({
+        sensor: "ID735",
+        von: "2019-01-01",
+        bis: "2019-12-31",
+        format: "json",
+        quelle: "export",
+      }),
+    ).toBe("/export?sensor=ID735&von=2019-01-01&bis=2019-12-31&format=json");
+  });
+
   it("links to the zählerstand with the same settings", () => {
     expect(meterHref(csv)).toBe(
       "/zaehlerstand?sensor=ID742&von=2018-01-01&bis=2021-09-06&quelle=export",
     );
     expect(
-      selectionFromParams(Object.fromEntries(selectionParams(json))),
+      selectionFromParams(
+        Object.fromEntries(selectionParams(json)),
+        FAKE_WINDOW,
+      ),
     ).toEqual(json);
   });
 });
@@ -164,11 +199,41 @@ describe("helpers", () => {
   });
 
   it("has presets inside the data range", () => {
-    for (const preset of PRESETS) {
+    const list = presets(FAKE_WINDOW);
+    expect(list.map((p) => p.label)).toEqual([
+      "Alles",
+      "2021",
+      "2020",
+      "2019",
+      "2018",
+      "Letzte 30 Tage",
+    ]);
+    for (const preset of list) {
       expect(preset.range.from >= DATA_START).toBe(true);
       expect(preset.range.to <= DATA_END).toBe(true);
     }
-    expect(PRESETS.find((p) => p.id === "30d")?.range.from).toBe("2021-08-08");
+    expect(list.find((p) => p.id === "30d")?.range.from).toBe("2021-08-08");
+    expect(
+      presetFor({ from: "2020-01-01", to: "2020-12-31" }, list)?.label,
+    ).toBe("2020");
+  });
+
+  it("builds the presets and the backcalculation from a smaller import", () => {
+    const window = {
+      from: "2020-03-15",
+      to: "2020-05-10",
+      firstEsl: "2020-04-01",
+      lastEsl: "2020-05-01",
+    };
+    const list = presets(window);
+    expect(list.map((p) => [p.label, p.range.from, p.range.to])).toEqual([
+      ["Alles", "2020-03-15", "2020-05-10"],
+      ["2020", "2020-03-15", "2020-05-10"],
+      ["Letzte 30 Tage", "2020-04-11", "2020-05-10"],
+    ]);
+    expect(backcalcEnd(window)).toBe("2020-03-31");
+    expect(backcalcEnd({ ...window, firstEsl: "2020-03-15" })).toBeNull();
+    expect(backcalcEnd({ ...window, firstEsl: null })).toBeNull();
   });
 
   it("picks round ticks like the mockup", () => {

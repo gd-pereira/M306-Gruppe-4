@@ -1,9 +1,8 @@
 import { SENSOR_IDS, type SensorId } from "@/lib/types";
 import {
-  DATA_END,
-  DATA_START,
   isDayKey,
   SENSORS,
+  type DataWindow,
   type DayKey,
   type ExportSelection,
 } from "./export-data";
@@ -12,32 +11,45 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 export type ExportMode = "file" | "api";
 
+function one(params: SearchParams, key: string): string | undefined {
+  const value = params[key];
+  return typeof value === "string" ? value : undefined;
+}
+
 export function modeFromParams(params: SearchParams): ExportMode {
   return params.modus === "api" ? "api" : "file";
 }
 
-function clampDay(value: string | undefined, fallback: DayKey): DayKey {
+export function sensorFromParams(params: SearchParams): SensorId {
+  const sensor = one(params, "sensor");
+  return SENSORS.some((s) => s.id === sensor)
+    ? (sensor as SensorId)
+    : SENSOR_IDS.consumption;
+}
+
+function clampDay(
+  value: string | undefined,
+  fallback: DayKey,
+  window: DataWindow,
+): DayKey {
   if (!value || !isDayKey(value)) return fallback;
-  if (value < DATA_START) return DATA_START;
-  if (value > DATA_END) return DATA_END;
+  if (value < window.from) return window.from;
+  if (value > window.to) return window.to;
   return value;
 }
 
-// ?sensor=ID742&von=2018-01-01&bis=2021-09-06, the same parameters the zählerstand page uses
-export function selectionFromParams(params: SearchParams): ExportSelection {
-  const one = (key: string) => {
-    const value = params[key];
-    return typeof value === "string" ? value : undefined;
-  };
-  const sensor = one("sensor");
+// ?sensor=ID742&von=2018-01-01&bis=2021-09-06, the same parameters the zählerstand page uses,
+// the days are cut to the imported data
+export function selectionFromParams(
+  params: SearchParams,
+  window: DataWindow,
+): ExportSelection {
   return {
-    format: one("format") === "json" ? "json" : "csv",
-    sensor: SENSORS.some((s) => s.id === sensor)
-      ? (sensor as SensorId)
-      : SENSOR_IDS.consumption,
+    format: one(params, "format") === "json" ? "json" : "csv",
+    sensor: sensorFromParams(params),
     range: {
-      from: clampDay(one("von"), DATA_START),
-      to: clampDay(one("bis"), DATA_END),
+      from: clampDay(one(params, "von"), window.from, window),
+      to: clampDay(one(params, "bis"), window.to, window),
     },
   };
 }
@@ -54,6 +66,16 @@ export function selectionParams(
   if (selection.format === "json") params.set("format", "json");
   if (mode === "api") params.set("modus", "api");
   return params;
+}
+
+// «Zurück zum Export» from the zählerstand, the export checks the values itself
+export function exportBackHref(params: SearchParams): string {
+  const keep = new URLSearchParams();
+  for (const key of ["sensor", "von", "bis", "format"]) {
+    const value = one(params, key);
+    if (value) keep.set(key, value);
+  }
+  return `/export?${keep}`;
 }
 
 // quelle=export turns the header button of the zählerstand into «Zurück zum Export»

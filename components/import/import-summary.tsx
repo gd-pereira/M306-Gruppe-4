@@ -4,14 +4,20 @@ import NumberFlow from "@number-flow/react";
 import { ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import { dayOf, dayStart } from "@/components/export/export-data";
 import { EASE_OUT } from "@/components/motion-provider";
 import { formatDate, formatNumber } from "@/lib/format";
 import { SENSOR_IDS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import type { ImportSummary as Summary } from "./import-view";
 
-function startOfYear(ts: number): number {
-  return Date.UTC(new Date(ts * 1000).getUTCFullYear(), 0, 1) / 1000;
+// 01.01. 00:00 swiss time, the data starts there and not at 01:00
+function yearStart(year: number): number {
+  return dayStart(`${year}-01-01`);
+}
+
+function yearOf(ts: number): number {
+  return Number(dayOf(ts).slice(0, 4));
 }
 
 // sdat as one bar with its gaps in red, every esl reading as a thin tick, years below
@@ -19,16 +25,12 @@ function Coverage({ summary }: { summary: Summary }) {
   const { period, sdat, eslReadings } = summary;
   if (!period) return null;
 
-  const start = startOfYear(period.start);
+  const start = yearStart(yearOf(period.start));
   const end = Math.max(period.end, sdat?.end ?? 0) + 30 * 24 * 60 * 60;
   const x = (ts: number) => ((ts - start) / (end - start)) * 100;
 
   const years: number[] = [];
-  for (
-    let year = new Date(start * 1000).getUTCFullYear();
-    Date.UTC(year, 0, 1) / 1000 <= end;
-    year++
-  ) {
+  for (let year = yearOf(period.start); yearStart(year) <= end; year++) {
     years.push(year);
   }
 
@@ -91,7 +93,7 @@ function Coverage({ summary }: { summary: Summary }) {
           <span
             key={year}
             className="absolute top-0 tabular-nums"
-            style={{ left: `${x(Date.UTC(year, 0, 1) / 1000)}%` }}
+            style={{ left: `${x(yearStart(year))}%` }}
           >
             {year}
           </span>

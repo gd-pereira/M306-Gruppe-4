@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-Flux reads SDAT and ESL smart meter files and shows consumption, feed-in and meter readings. All data is processed locally in the browser, nothing is uploaded to a server.
+Flux reads SDAT and ESL smart meter files and shows consumption, feed-in and meter readings. The files are processed locally in the browser and kept in IndexedDB; data only leaves the browser when you send it with «An API senden» on the export page.
 
 Built by M306 Gruppe 4 during the BZZ project week (28.09. to 02.10.2026).
 
@@ -38,7 +38,7 @@ As of 01.10.2026 all features are done and every page reads the imported data fr
 
 - [Next.js 16](https://nextjs.org) (App Router), React 19, TypeScript
 - Tailwind CSS 4, [shadcn/ui](https://ui.shadcn.com) (Base UI)
-- Chart components from the [bklit](https://ui.bklit.com) registry (built on visx and Motion), copied into `components/charts/`
+- Charts drawn as SVG with [d3-shape](https://d3js.org/d3-shape) for the paths and [Motion](https://motion.dev) for the animations
 - [fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser) for the XML files
 - [Vitest](https://vitest.dev) for tests
 - ESLint and Prettier
@@ -63,7 +63,9 @@ Then open [http://localhost:3000](http://localhost:3000) and log in with the `AD
 
 ### Login
 
-`proxy.ts` sends every visitor without a valid session cookie `flux-session` to `/login`. `app/api/login/route.ts` compares the submitted password on the server with the environment variable `ADMIN_PASSWORD` and answers with an httpOnly cookie holding an HMAC keyed with the password, so the password never ends up in the browser and changing it logs everyone out. Set `ADMIN_PASSWORD` in `.env.local` (and in the Vercel project settings); without it nobody can log in.
+`proxy.ts` sends every visitor without a valid session cookie `flux-session` to `/login`. `app/api/login/route.ts` compares the submitted password on the server with the environment variable `ADMIN_PASSWORD` (constant time) and answers with an httpOnly cookie `nonce.expiry.signature`: a random nonce, an expiry 12 hours later and an HMAC over both keyed with the password (`lib/session.ts`). The password never ends up in the browser, every login gets a new token, a token runs out after 12 hours and changing the password logs everyone out. Set `ADMIN_PASSWORD` in `.env.local` (and in the Vercel project settings); without it nobody can log in.
+
+The test server `app/api/zaehlerstaende` needs the same session: without it `POST` and `GET` answer 401, a body over 16 MB gets 413.
 
 ### Scripts
 
@@ -76,6 +78,7 @@ Then open [http://localhost:3000](http://localhost:3000) and log in with the `AD
 | `npm run lint`         | Check the code with ESLint              |
 | `npm run format`       | Format all files with Prettier          |
 | `npm run format:check` | Check formatting without changing files |
+| `npm run slides`       | Build `praesentation.pptx`              |
 
 ## Project structure
 
@@ -85,16 +88,17 @@ app/
   page.tsx               redirects to /dashboard
   login/                 login page
   (app)/                 pages with sidebar: dashboard, verbrauch, zaehlerstand, import, export
+  api/login/             checks the password, sets and deletes the session cookie
+  api/zaehlerstaende/    test server for «An API senden» (needs a session)
   not-found.tsx          404 page
   icon.svg, apple-icon.tsx, opengraph-image.tsx   app icons and share image
 components/
   app-shell/             sidebar, command palette, keyboard shortcuts
   dashboard/, analysis/, import/, export/, login/   screens of the pages
   brand/flux-logo.tsx    FluxLogo and FluxMark components
-  charts/                bklit chart components (line chart, axes, tooltip, ...)
   ui/                    shadcn components
 lib/
-  session.ts             session cookie name and HMAC token (see Login)
+  session.ts             session token with nonce, expiry and HMAC (see Login)
   format.ts              number and date formatting for the UI
   utils.ts               cn() for Tailwind classes
   types.ts               shared types and the sensor IDs
@@ -111,9 +115,13 @@ lib/
   import.worker.ts       runs the import in a background thread
   start-import.ts        startImport(), starts the worker from a page
   data-store.ts          shared state for all pages: import, time range, data in range
+  saved-data.ts          keeps the last import in IndexedDB
+  export.ts              CSV and JSON files of the meter readings
 public/brand/            logo files
+scripts/                 presentation (npm run slides) and its screenshots
 tests/
   *.test.ts              Vitest tests
+  fake-data.ts           made-up readings for the chart and export helper tests
   fixtures/              small SDAT and ESL files used by the tests
 data/
   sdat/                  5133 SDAT files (sample data from the client)
@@ -225,11 +233,14 @@ const {
 | `useDataStore()`      | React hook, returns the state and re-renders on every change                                                                        |
 | `importFiles(files)`  | Reads the files in the worker and replaces the old data. Resolves when done, never throws. A second call while importing is ignored |
 | `setRange(from, to)`  | Sets the time range of the charts                                                                                                   |
-| `useRangeData(level)` | React hook, data of the zoom level (`"15min"`, `"hour"`, `"day"`, `"week"`, `"month"`) in the range, or `null` without data         |
-| `getRangeData(level)` | Same without React, e.g. for the export                                                                                             |
+| `getRangeData(level)` | Data of the zoom level (`"15min"`, `"hour"`, `"day"`, `"week"`, `"month"`) in the range, or `null` without data                     |
 | `resetDataStore()`    | Throws away all data, a running import is dropped                                                                                   |
 
-`useRangeData` returns `{ consumption, feedIn }`, each with `usage`, `meterReading` (both `DataPoint[]` in the chosen zoom level) and `esl` (the real ESL readings in the range). A bucket that is only partly inside the range is included, e.g. 15.03. to 15.05. on the month level gives March, April and May.
+`getRangeData` returns `{ consumption, feedIn }`, each with `usage`, `meterReading` (both `DataPoint[]` in the chosen zoom level) and `esl` (the real ESL readings in the range). A bucket that is only partly inside the range is included, e.g. 15.03. to 15.05. on the month level gives March, April and May.
+
+### Pages and the data window
+
+The verbrauch, zählerstand and export pages don't work on the store directly but on `components/analysis/analysis-data.ts` (`useAnalysisData()`) and `components/export/export-source.ts` (`useExportSource()`, `useDataWindow()`). Every range comes from the `DataWindow` of the import (`dataWindow()` in `components/export/export-data.ts`): the first and last day with SDAT values and the first and last ESL reading. Scopes, presets, the backcalculated part and the «Keine SDAT-Daten ab …» marks are derived from it, so a smaller or later import works the same as the sample data. The pages read `?von=…&bis=…` on the client and cut it to the window once the data is there.
 
 ### Examples
 
@@ -263,37 +274,21 @@ export default function ImportPage() {
 }
 ```
 
-Chart:
+Totals of the imported days:
 
 ```tsx
 "use client";
 
-import { Line, LineChart } from "@/components/charts/line-chart";
-import { setRange, useDataStore, useRangeData } from "@/lib/data-store";
+import { useAnalysisData } from "@/components/analysis/analysis-source";
+import { usageScope, usageTotals } from "@/components/analysis/analysis-data";
 
-export function ConsumptionChart() {
-  const { bounds } = useDataStore();
-  const data = useRangeData("day");
-
-  if (data === null || bounds === null) {
-    return <p>Noch keine Daten importiert.</p>;
-  }
-
-  // the bklit charts want a Date
-  const points = data.consumption.usage.map((p) => ({
-    date: new Date(p.ts * 1000),
-    consumption: p.value,
-  }));
-
+export function Totals() {
+  const data = useAnalysisData();
+  const { consumption, feedIn } = usageTotals(usageScope(data).data, data);
   return (
-    <>
-      <button onClick={() => setRange(bounds.from, bounds.to)}>
-        Alles anzeigen
-      </button>
-      <LineChart data={points}>
-        <Line dataKey="consumption" />
-      </LineChart>
-    </>
+    <p>
+      Bezug {consumption.toFixed(1)} kWh, Einspeisung {feedIn.toFixed(1)} kWh
+    </p>
   );
 }
 ```
@@ -336,6 +331,9 @@ Vitest runs every `tests/**/*.test.ts` file in a Node environment. The tests cov
 - aggregation across DST changes, week starts and year boundaries
 - the whole import: sorting files into SDAT, ESL, ignored and errors, duplicate count, file list with duplicate files, zoom levels
 - the data store: import state, last import, range bounds, data in range, crashed import
+- the verbrauch, zählerstand and dashboard data on the whole sample data and on a partial import (the window comes from the files, no value is dropped)
+- the export: file content, sizes, presets and URL parameters cut to the data window
+- Swiss local time on the DST days, the session token (expiry, forged and changed tokens) and the test server (401 without session, 413 for large bodies)
 
 ## Brand
 
@@ -356,5 +354,6 @@ In code, use `FluxLogo` or `FluxMark` from `components/brand/flux-logo.tsx`. Arr
 ## Documentation
 
 - `docs/Projektbeschreibung.pdf`: project description from the client
+- `docs/Praesentation_Sprechernotizen.md`: speaker notes for the presentation
 - `docs/Bewertungskriterien.pdf`: grading criteria
 - `docs/sdat-spec/`: SDAT standard (Swiss standardised data exchange) with appendices and example files.

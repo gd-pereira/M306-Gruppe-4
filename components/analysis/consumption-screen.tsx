@@ -17,7 +17,7 @@ import {
   usePeriod,
 } from "./controls";
 import { useAnalysisData } from "./analysis-source";
-import { USAGE_SCOPE, usageTotals } from "./analysis-data";
+import { usageScope, usageTotals } from "./analysis-data";
 import {
   Badge,
   KpiCard,
@@ -29,6 +29,7 @@ import {
   Swap,
 } from "./parts";
 import {
+  periodFromParams,
   periodParams,
   periodTitle,
   resolutionOf,
@@ -52,10 +53,21 @@ const RESOLUTION_LABEL: Record<Resolution, string> = {
   month: "Monat",
 };
 
-export function ConsumptionScreen({ initial }: { initial: Period }) {
+type SearchParams = Record<string, string | string[] | undefined>;
+
+// the period from the url is checked against the imported days, so the view only starts
+// once the data is there and starts fresh when other data comes in
+export function ConsumptionScreen({ params }: { params: SearchParams }) {
   const summary = useDataSummary();
+  const data = useAnalysisData();
   if (!summary) return <NoData page="Verbrauch" />;
-  return <ConsumptionView initial={initial} />;
+  const scope = usageScope(data);
+  return (
+    <ConsumptionView
+      key={`${scope.data.from}_${scope.data.to}`}
+      initial={periodFromParams(params, scope)}
+    />
+  );
 }
 
 // «07.04., 11:00», with the year when the period spans more than one
@@ -74,6 +86,7 @@ function ConsumptionView({ initial }: { initial: Period }) {
     feedIn: true,
   });
   const data = useAnalysisData();
+  const scope = usageScope(data);
   const totals = useMemo(
     () => usageTotals(period.range, data),
     [period.range, data],
@@ -96,16 +109,16 @@ function ConsumptionView({ initial }: { initial: Period }) {
         variants={rise}
         className="flex flex-wrap items-center justify-between gap-3"
       >
-        <Breadcrumb period={period} scope={USAGE_SCOPE} onSelect={change} />
+        <Breadcrumb period={period} scope={scope} onSelect={change} />
         <div className="flex items-center gap-3">
           <Pager
             period={period}
-            scope={USAGE_SCOPE}
+            scope={scope}
             direction={direction}
             markPartial
             onChange={change}
           />
-          <LevelToggle period={period} scope={USAGE_SCOPE} onChange={change} />
+          <LevelToggle period={period} scope={scope} onChange={change} />
         </div>
       </motion.div>
 
@@ -154,7 +167,7 @@ function ConsumptionView({ initial }: { initial: Period }) {
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="min-w-0 text-[15px] font-semibold">
               <Swap
-                value={`${RESOLUTION_TITLE[resolution]} · ${periodTitle(period, USAGE_SCOPE)}`}
+                value={`${RESOLUTION_TITLE[resolution]} · ${periodTitle(period, scope)}`}
               />
             </h2>
             <Badge>Auflösung: {RESOLUTION_LABEL[resolution]}</Badge>
@@ -187,7 +200,7 @@ function ConsumptionView({ initial }: { initial: Period }) {
         <ConsumptionChart
           period={period}
           visible={visible}
-          drill={drillProps(period, USAGE_SCOPE, change)}
+          drill={drillProps(period, scope, change)}
           className="h-[clamp(260px,42vh,400px)]"
         />
         <Brush period={period} onChange={change} />

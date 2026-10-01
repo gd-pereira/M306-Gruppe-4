@@ -17,7 +17,6 @@ import { useAnalysisData } from "./analysis-source";
 import {
   eslAround,
   eslReadings,
-  FIRST_ESL,
   gapMarks,
   gapsIn,
   isIncomplete,
@@ -26,6 +25,7 @@ import {
   rangeEnd,
   rangeStart,
   sdatEndReading,
+  type AnalysisData,
   type EslReading,
   type MeterPoint,
 } from "./analysis-data";
@@ -72,10 +72,11 @@ function interpolate(points: MeterPoint[], ts: number): number | null {
 
 const kwh = (value: number) => `${formatNumber(value, 1)} kWh`;
 
-function sourceOf(ts: number, gaps: DayRange[]): string {
+function sourceOf(ts: number, data: AnalysisData): string {
   const { day } = localParts(ts - 1);
-  if (day < FIRST_ESL) return "Zurückgerechnet";
-  if (gaps.some((gap) => day >= gap.from && day <= gap.to)) {
+  const { firstEsl } = data.window;
+  if (firstEsl && day < firstEsl) return "Zurückgerechnet";
+  if (data.gaps.some((gap) => day >= gap.from && day <= gap.to)) {
     return "Lücke, gerade verbunden";
   }
   return "SDAT-Verlauf";
@@ -259,7 +260,7 @@ export function MeterChart({
           <TooltipRow label="Zählerstand" value={kwh(point.value)} />
           <TooltipRow
             label="Quelle"
-            value={sourceOf(point.ts, data.gaps)}
+            value={sourceOf(point.ts, data)}
             tone="muted"
           />
         </>

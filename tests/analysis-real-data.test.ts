@@ -6,13 +6,15 @@ import {
   gapsIn,
   isIncomplete,
   meterLine,
+  meterScope,
   realAnalysisData,
-  USAGE_SCOPE,
   usageBuckets,
+  usageScope,
   usageTotals,
   valueCount,
   type AnalysisData,
 } from "@/components/analysis/analysis-data";
+import { dayOf } from "@/components/export/export-data";
 import { importView } from "@/components/import/import-view";
 import {
   addFile,
@@ -26,21 +28,39 @@ import { SENSOR_IDS } from "@/lib/types";
 // reading it takes about 10 seconds
 let result: ImportResult;
 let data: AnalysisData;
+let all: { from: string; to: string };
 
-beforeAll(() => {
+function importDirs(keep: (dir: string, name: string) => boolean) {
   const parsed = createParsedFiles();
   for (const dir of ["data/sdat", "data/esl"]) {
     for (const name of readdirSync(dir)) {
+      if (!keep(dir, name)) continue;
       addFile(parsed, name, readFileSync(path.join(dir, name), "utf8"));
     }
   }
-  result = buildResult(parsed);
+  return buildResult(parsed);
+}
+
+beforeAll(() => {
+  result = importDirs(() => true);
   data = realAnalysisData(result);
+  all = usageScope(data).data;
 }, 60_000);
 
-const all = USAGE_SCOPE.data;
-
 describe("real analysis data", () => {
+  it("takes its window from the files", () => {
+    expect(data.window).toEqual({
+      from: "2018-01-01",
+      to: "2021-09-06",
+      firstEsl: "2019-01-01",
+      lastEsl: "2022-09-01",
+    });
+    expect(meterScope(data).all).toEqual({
+      from: "2018-01-01",
+      to: "2022-12-31",
+    });
+  });
+
   it("has the 4 gaps of the data and every other value", () => {
     expect(data.gaps).toEqual([
       { from: "2020-02-09", to: "2020-02-09" },
@@ -94,6 +114,29 @@ describe("real analysis data", () => {
     const days = usageBuckets(year, "day", data);
     expect(days.filter((day) => day.consumption === null)).toHaveLength(3);
   });
+
+  it("keeps every value of a partial import (only the sdat files of 2020)", () => {
+    const partial = importDirs(
+      (dir, name) => dir === "data/esl" || name.startsWith("2020"),
+    );
+    const part = realAnalysisData(partial);
+    const usage = partial.consumption.usage["15min"];
+    expect(part.window.from).toBe(dayOf(usage[0].ts));
+    expect(part.window.to).toBe(dayOf(usage[usage.length - 1].ts));
+    expect(part.window.to < data.window.to).toBe(true);
+    // nothing outside a fixed window is dropped
+    expect(valueCount(part)).toBe(partial.consumption.valueCount);
+    const line = meterLine(
+      SENSOR_IDS.consumption,
+      usageScope(part).data,
+      "day",
+      part,
+    );
+    expect(line[0].value).toBeGreaterThan(0);
+    for (let i = 1; i < line.length; i++) {
+      expect(line[i].value).toBeGreaterThanOrEqual(line[i - 1].value);
+    }
+  }, 60_000);
 
   describe.each([SENSOR_IDS.consumption, SENSOR_IDS.feedIn])(
     "meter reading %s",
