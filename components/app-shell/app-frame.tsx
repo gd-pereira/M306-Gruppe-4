@@ -99,14 +99,21 @@ function FullscreenBar({ play, pending }: { play: boolean; pending: boolean }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, transition: { duration: play ? 0.15 : 0 } }}
       transition={{ duration: 0.35, ease: EASE_OUT }}
-      className="flex items-center justify-between pb-3"
+      className="relative -mx-10 -mt-8 mb-2 flex h-[72px] items-center justify-between bg-card/60 px-10"
     >
+      <motion.span
+        aria-hidden
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: 1 }}
+        transition={{ duration: play ? 0.6 : 0, ease: EASE_OUT, delay: 0.1 }}
+        className="absolute inset-x-0 bottom-0 h-px origin-left bg-border"
+      />
       <Link
         href="/import"
         aria-label="Zum Import"
         className="rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <FluxLogo className="h-7 w-auto text-foreground" />
+        <FluxLogo className="h-9 w-auto text-foreground" />
       </Link>
       <Link
         href="/login"
