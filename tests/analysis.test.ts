@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fakeAnalysisData } from "./fake-data";
 import {
   bucketTitle,
   localParts,
@@ -20,7 +21,7 @@ import {
   usageTotals,
   valueCount,
   yearTotals,
-} from "@/components/analysis/fake-analysis";
+} from "@/components/analysis/analysis-data";
 import {
   breadcrumb,
   drillDown,
@@ -35,7 +36,7 @@ import {
   switchLevel,
   type Period,
 } from "@/components/analysis/period";
-import { DATA_END, DATA_START } from "@/components/export/fake-export";
+import { DATA_END, DATA_START } from "@/components/export/export-data";
 
 const april: Period = {
   level: "month",
@@ -173,32 +174,42 @@ describe("period", () => {
 
 describe("dashboard data", () => {
   it("splits the totals into calendar years", () => {
-    const years = yearTotals();
+    const years = yearTotals(fakeAnalysisData());
     expect(years.map((y) => y.year)).toEqual([2018, 2019, 2020, 2021]);
     expect(years[3]).toMatchObject({
       partial: true,
       range: { from: "2021-01-01", to: DATA_END },
     });
-    const all = usageTotals(USAGE_SCOPE.data);
+    const all = usageTotals(USAGE_SCOPE.data, fakeAnalysisData());
     const sum = years.reduce((s, y) => s + y.consumption, 0);
     expect(sum).toBeCloseTo(all.consumption, 3);
   });
 
   it("counts the 15 min values without the gap days", () => {
     // 1'345 days minus 11 gap days, 96 values each, minus the hour of the dst switch in march 2021
-    expect(valueCount()).toBe((1345 - 11) * 96 - 4);
+    expect(valueCount(fakeAnalysisData())).toBe((1345 - 11) * 96 - 4);
   });
 });
 
 describe("verbrauch data", () => {
   it("has one value per bucket of the resolution", () => {
-    expect(usageBuckets(april.range, "day")).toHaveLength(30);
+    expect(usageBuckets(april.range, "day", fakeAnalysisData())).toHaveLength(
+      30,
+    );
     expect(
-      usageBuckets({ from: "2021-04-11", to: "2021-04-11" }, "15min"),
+      usageBuckets(
+        { from: "2021-04-11", to: "2021-04-11" },
+        "15min",
+        fakeAnalysisData(),
+      ),
     ).toHaveLength(96);
     // the day the clocks go forward has 23 hours
     expect(
-      usageBuckets({ from: "2021-03-28", to: "2021-03-28" }, "hour"),
+      usageBuckets(
+        { from: "2021-03-28", to: "2021-03-28" },
+        "hour",
+        fakeAnalysisData(),
+      ),
     ).toHaveLength(23);
   });
 
@@ -206,44 +217,57 @@ describe("verbrauch data", () => {
     const february = usageBuckets(
       { from: "2021-02-01", to: "2021-02-28" },
       "day",
+      fakeAnalysisData(),
     );
     const gap = february.filter((bucket) => bucket.consumption === null);
     expect(gap).toHaveLength(7);
-    const months = usageBuckets(USAGE_SCOPE.all, "month");
+    const months = usageBuckets(USAGE_SCOPE.all, "month", fakeAnalysisData());
     expect(months.find((m) => m.missingDays > 0)?.missingDays).toBe(1);
     // september 2021 is cut off by the end of sdat and left out
     expect(months).toHaveLength(44);
   });
 
   it("sums the same kWh on every resolution", () => {
-    const days = usageBuckets(april.range, "day");
-    const hours = usageBuckets(april.range, "hour");
+    const days = usageBuckets(april.range, "day", fakeAnalysisData());
+    const hours = usageBuckets(april.range, "hour", fakeAnalysisData());
     const total = (list: typeof days) =>
       list.reduce((sum, bucket) => sum + (bucket.consumption ?? 0), 0);
     expect(total(hours)).toBeCloseTo(total(days), 6);
-    expect(usageTotals(april.range).consumption).toBeCloseTo(total(days), 6);
-    expect(usageTotals(april.range).peak?.value).toBeGreaterThan(0);
+    expect(
+      usageTotals(april.range, fakeAnalysisData()).consumption,
+    ).toBeCloseTo(total(days), 6);
+    expect(
+      usageTotals(april.range, fakeAnalysisData()).peak?.value,
+    ).toBeGreaterThan(0);
   });
 
   it("marks the parts without sdat", () => {
-    const september = usageRegions({ from: "2021-09-01", to: "2021-09-30" });
+    const september = usageRegions(
+      { from: "2021-09-01", to: "2021-09-30" },
+      fakeAnalysisData(),
+    );
     expect(september).toHaveLength(1);
     expect(september[0].from).toBe(
       rangeStart({ from: "2021-09-07", to: "2021-09-07" }),
     );
-    expect(usageRegions(april.range)).toHaveLength(0);
+    expect(usageRegions(april.range, fakeAnalysisData())).toHaveLength(0);
   });
 });
 
 describe("zählerstand data", () => {
   it("never goes negative and never falls", () => {
     for (const sensor of ["ID742", "ID735"] as const) {
-      const line = meterLine(sensor, METER_SCOPE.all, "day");
+      const line = meterLine(
+        sensor,
+        METER_SCOPE.all,
+        "day",
+        fakeAnalysisData(),
+      );
       expect(line[0].value).toBeGreaterThan(0);
       for (let i = 1; i < line.length; i++) {
         expect(line[i].value).toBeGreaterThanOrEqual(line[i - 1].value);
       }
-      const esl = eslReadings(sensor);
+      const esl = eslReadings(sensor, fakeAnalysisData());
       for (let i = 1; i < esl.length; i++) {
         expect(esl[i].value).toBeGreaterThan(esl[i - 1].value);
       }
@@ -251,14 +275,14 @@ describe("zählerstand data", () => {
   });
 
   it("has a reading on every first of the month from 2019 to 09.2022", () => {
-    const esl = eslReadings("ID742");
+    const esl = eslReadings("ID742", fakeAnalysisData());
     expect(esl[0].day).toBe("2019-01-01");
     expect(esl[esl.length - 1].day).toBe("2022-09-01");
     expect(esl).toHaveLength(45);
   });
 
   it("compares sdat with the esl difference, 3x when complete", () => {
-    const esl = eslReadings("ID742");
+    const esl = eslReadings("ID742", fakeAnalysisData());
     const may = esl.find((reading) => reading.day === "2021-05-01")!;
     expect(may.check?.sdat).toBeCloseTo(may.check!.eslDiff * 3, 6);
     const incomplete = esl.filter(isIncomplete).map((reading) => reading.day);
@@ -274,7 +298,11 @@ describe("zählerstand data", () => {
   });
 
   it("brings the readings around a short period for the line to the edges", () => {
-    const around = eslAround("ID742", { from: "2021-04-11", to: "2021-04-11" });
+    const around = eslAround(
+      "ID742",
+      { from: "2021-04-11", to: "2021-04-11" },
+      fakeAnalysisData(),
+    );
     expect(around.map((reading) => reading.day)).toEqual([
       "2021-04-01",
       "2021-05-01",
@@ -282,7 +310,7 @@ describe("zählerstand data", () => {
   });
 
   it("labels backcalculation and the end of sdat", () => {
-    const regions = meterRegions(METER_SCOPE.all);
+    const regions = meterRegions(METER_SCOPE.all, fakeAnalysisData());
     expect(regions.map((region) => region.label)).toEqual([
       "Zurückgerechnet",
       "Keine SDAT-Daten",

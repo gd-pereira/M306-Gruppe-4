@@ -147,6 +147,27 @@ describe("data store", () => {
     expect(getDataState()).toMatchObject({ status: "empty", result: null });
   });
 
+  it("cancel and reset stop the worker of the running import", async () => {
+    const signals: AbortSignal[] = [];
+    startImportMock.mockImplementation(
+      (_files, _onProgress, signal) =>
+        new Promise((_resolve, reject) => {
+          signals.push(signal!);
+          signal!.addEventListener("abort", () => reject(new Error("abort")));
+        }),
+    );
+
+    const cancelled = importFiles(files);
+    cancelDataImport();
+    await cancelled;
+    const reset = importFiles(files);
+    resetDataStore();
+    await reset;
+
+    expect(signals.map((signal) => signal.aborted)).toEqual([true, true]);
+    expect(getDataState()).toMatchObject({ status: "empty", failure: null });
+  });
+
   it("meter readings are filtered like the usage", async () => {
     startImportMock.mockResolvedValue(fixtureResult());
     await importFiles(files);

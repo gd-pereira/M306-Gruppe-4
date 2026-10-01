@@ -10,7 +10,7 @@ import {
   formatDay,
   formatDayRange,
   type DayKey,
-} from "@/components/export/fake-export";
+} from "@/components/export/export-data";
 import { formatNumber } from "@/lib/format";
 import type { SensorId } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,7 @@ import {
   SDAT_END,
   sourceSegments,
   type SourceKind,
-} from "./fake-analysis";
+} from "./analysis-data";
 import type { Period } from "./period";
 import { rise } from "./parts";
 

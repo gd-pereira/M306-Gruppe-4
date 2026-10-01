@@ -7,10 +7,11 @@ import { useState, type ReactNode } from "react";
 import { EASE_OUT } from "@/components/motion-provider";
 import { Calendar } from "@/components/export/date-field";
 import { SegmentedTabs } from "@/components/import/table-parts";
-import { formatDay } from "@/components/export/fake-export";
+import { formatDay } from "@/components/export/export-data";
 import { cn } from "@/lib/utils";
 import { localParts } from "./chart-axes";
-import { GAP_MONTHS, PARTIAL_MONTH } from "./fake-analysis";
+import { gapMonths, PARTIAL_MONTH } from "./analysis-data";
+import { useAnalysisData } from "./analysis-source";
 import {
   breadcrumb,
   clampDay,
@@ -336,6 +337,7 @@ function MonthGrid({
   const [year, setYear] = useState(Number(period.range.from.slice(0, 4)));
   const [direction, setDirection] = useState(0);
   const current = period.range.from.slice(0, 7);
+  const gaps = gapMonths(useAnalysisData());
 
   function show(next: number) {
     setDirection(Math.sign(next - year));
@@ -378,7 +380,7 @@ function MonthGrid({
               const month = periodOf("month", `${key}-01`, scope);
               const disabled = !intersect(month.range, scope.data);
               const selected = key === current;
-              const mark = GAP_MONTHS.has(key)
+              const mark = gaps.has(key)
                 ? "gap"
                 : markPartial && key === PARTIAL_MONTH
                   ? "partial"
@@ -421,6 +423,7 @@ function YearGrid({
 }) {
   const firstYear = Number(scope.data.from.slice(0, 4));
   const lastYear = Number(scope.data.to.slice(0, 4));
+  const gaps = gapMonths(useAnalysisData());
   const years = Array.from(
     { length: lastYear - firstYear + 1 },
     (_, i) => firstYear + i,
@@ -430,7 +433,7 @@ function YearGrid({
       <span className="text-center text-[13px] font-semibold">Jahr</span>
       <div className="grid grid-cols-3 gap-1">
         {years.map((year) => {
-          const hasGap = [...GAP_MONTHS].some((month) =>
+          const hasGap = [...gaps].some((month) =>
             month.startsWith(String(year)),
           );
           return (

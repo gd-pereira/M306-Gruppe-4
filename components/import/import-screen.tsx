@@ -5,7 +5,6 @@ import { useState } from "react";
 import { formatDate } from "@/lib/format";
 import { AddBar } from "./add-bar";
 import { Dropzone } from "./dropzone";
-import { demoFiles, isXml, type FileInfo } from "./fake-import";
 import { FileTable, type FileTab } from "./file-table";
 import { useFilePickers } from "./file-pickers";
 import { IgnoredFilesDialog } from "./ignored-files-dialog";
@@ -16,10 +15,12 @@ import { DeleteDataDialog } from "./delete-data-dialog";
 import {
   cancelImport,
   deleteSavedData,
+  startDemoImport,
   startImport,
   useImportStore,
 } from "./import-store";
 import { ImportSummary } from "./import-summary";
+import { isXml } from "./import-view";
 import { ReplaceDataDialog } from "./replace-data-dialog";
 import { useFileDrop } from "./use-file-drop";
 
@@ -35,7 +36,7 @@ export function ImportScreen() {
   const importing = status === "importing";
 
   // files waiting for "Ersetzen und importieren"
-  const [pending, setPending] = useState<FileInfo[] | null>(null);
+  const [pending, setPending] = useState<File[] | null>(null);
   const [ignoredOpen, setIgnoredOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   // which result the tab belongs to, a new import starts on its own default tab
@@ -60,7 +61,7 @@ export function ImportScreen() {
     ? `${formatDate(result.summary.period.start)} – ${formatDate(result.summary.period.end)}`
     : null;
 
-  function requestImport(files: FileInfo[]) {
+  function requestImport(files: File[]) {
     if (importing) return;
     // with nothing importable there is nothing to replace, the failure shows right away
     if (result && files.some((file) => isXml(file.name))) {
@@ -103,7 +104,7 @@ export function ImportScreen() {
               dragging={dragging}
               onPickFiles={pickers.openFiles}
               onPickFolder={pickers.openFolder}
-              onLoadDemo={() => startImport(demoFiles())}
+              onLoadDemo={() => void startDemoImport()}
             />
           </motion.div>
         ) : (

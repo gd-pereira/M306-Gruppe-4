@@ -9,7 +9,7 @@ import {
   formatBytes,
   type ExportSelection,
   type ExportStats,
-} from "./fake-export";
+} from "./export-data";
 import { AnimatedNumber } from "./hooks";
 import {
   ActionBar,

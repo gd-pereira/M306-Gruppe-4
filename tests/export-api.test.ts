@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { fakeExportSource } from "./fake-data";
 import {
   parseServerUrl,
   requestHead,
@@ -82,7 +83,12 @@ describe("sending", () => {
   it("posts the json export and reports the time", async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
-    const result = await sendExport(url, range, new AbortController().signal);
+    const result = await sendExport(
+      url,
+      range,
+      new AbortController().signal,
+      fakeExportSource(),
+    );
     expect(result).toMatchObject({
       kind: "sent",
       status: 201,
@@ -109,7 +115,14 @@ describe("sending", () => {
           new Response('{"error":"Database unavailable"}', { status: 500 }),
       ),
     );
-    expect(await sendExport(url, range, new AbortController().signal)).toEqual({
+    expect(
+      await sendExport(
+        url,
+        range,
+        new AbortController().signal,
+        fakeExportSource(),
+      ),
+    ).toEqual({
       kind: "http",
       status: 500,
       statusText: "Internal Server Error",
@@ -124,7 +137,14 @@ describe("sending", () => {
         throw new TypeError("Failed to fetch");
       }),
     );
-    expect(await sendExport(url, range, new AbortController().signal)).toEqual({
+    expect(
+      await sendExport(
+        url,
+        range,
+        new AbortController().signal,
+        fakeExportSource(),
+      ),
+    ).toEqual({
       kind: "unreachable",
     });
   });
@@ -138,9 +158,9 @@ describe("sending", () => {
         throw new DOMException("aborted", "AbortError");
       }),
     );
-    await expect(sendExport(url, range, controller.signal)).rejects.toThrow(
-      "aborted",
-    );
+    await expect(
+      sendExport(url, range, controller.signal, fakeExportSource()),
+    ).rejects.toThrow("aborted");
   });
 });
 

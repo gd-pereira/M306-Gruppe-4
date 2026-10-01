@@ -5,7 +5,7 @@ import {
   formatDayRange,
   isDayKey,
   type DayRange,
-} from "@/components/export/fake-export";
+} from "@/components/export/export-data";
 import { selectionFromParams } from "@/components/export/selection";
 
 export type RecentPage = "verbrauch" | "zaehlerstand" | "export";

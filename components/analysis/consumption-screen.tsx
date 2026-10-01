@@ -4,7 +4,7 @@ import { Scale, Sun, TrendingUp, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { useDataSummary } from "@/components/app-shell/use-data-summary";
-import { formatDay } from "@/components/export/fake-export";
+import { formatDay } from "@/components/export/export-data";
 import { localParts } from "./chart-axes";
 import { Brush } from "./brush";
 import { ConsumptionChart, SERIES, type SeriesKey } from "./consumption-chart";
@@ -16,7 +16,7 @@ import {
   usePeriod,
 } from "./controls";
 import { useAnalysisData } from "./analysis-source";
-import { USAGE_SCOPE, usageTotals } from "./fake-analysis";
+import { USAGE_SCOPE, usageTotals } from "./analysis-data";
 import {
   Badge,
   KpiCard,

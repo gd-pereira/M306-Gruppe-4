@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
 import { SENSOR_IDS } from "@/lib/types";
-import type { FileRow } from "./fake-import";
+import type { FileRow } from "./import-view";
 import { Pagination, type PageSize } from "./pagination";
 import { CountChip, FileName, SearchInput, SegmentedTabs } from "./table-parts";
 

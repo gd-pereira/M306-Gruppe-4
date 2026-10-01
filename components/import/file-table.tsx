@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { EASE_OUT } from "@/components/motion-provider";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { FileRow, FileStatus } from "./fake-import";
+import type { FileRow, FileStatus } from "./import-view";
 import { Pagination, type PageSize } from "./pagination";
 import {
   CountChip,
@@ -27,7 +27,8 @@ interface Sort {
 const STATUS_RANK: Record<FileStatus, number> = {
   error: 0,
   imported: 1,
-  ignored: 2,
+  duplicate: 2,
+  ignored: 3,
 };
 const DEFAULT_SORT: Sort = { key: "status", dir: "asc" };
 // dates are more useful newest first
@@ -51,7 +52,10 @@ function inTab(file: FileRow, tab: FileTab): boolean {
       return true;
     case "sdat":
     case "esl":
-      return file.type === tab && file.status === "imported";
+      return (
+        file.type === tab &&
+        (file.status === "imported" || file.status === "duplicate")
+      );
     case "ignored":
     case "error":
       return file.status === tab;

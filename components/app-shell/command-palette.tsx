@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { DayRange } from "@/components/export/fake-export";
+import type { DayRange } from "@/components/export/export-data";
 import { NAV_ITEMS, NEEDS_DATA_HINT, navItemFor, shortcutOf } from "./nav";
 import { MONTHS, useRecentViews } from "./recent-views";
 import { toggleSidebar, useSidebarPrefs } from "./sidebar-prefs";

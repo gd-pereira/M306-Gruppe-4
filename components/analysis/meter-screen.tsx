@@ -11,7 +11,7 @@ import {
   formatDay,
   sensorInfo,
   SENSORS,
-} from "@/components/export/fake-export";
+} from "@/components/export/export-data";
 import { selectionParams } from "@/components/export/selection";
 import { SegmentedTabs } from "@/components/import/table-parts";
 import { buttonVariants } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import {
   SDAT_END,
   type AnalysisData,
   USAGE_SCOPE,
-} from "./fake-analysis";
+} from "./analysis-data";
 import { MeterChart } from "./meter-chart";
 import {
   DotSwatch,

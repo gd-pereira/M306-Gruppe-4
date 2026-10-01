@@ -18,7 +18,7 @@ import {
   formatDay,
   type DayKey,
   type DayRange,
-} from "@/components/export/fake-export";
+} from "@/components/export/export-data";
 import { cn } from "@/lib/utils";
 import { localParts } from "./chart-axes";
 import { useAnalysisData } from "./analysis-source";
@@ -29,7 +29,7 @@ import {
   usageBuckets,
   usageTotals,
   type UsageBucket,
-} from "./fake-analysis";
+} from "./analysis-data";
 import {
   clampDay,
   intersect,

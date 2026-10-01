@@ -7,7 +7,7 @@ import {
   isDayKey,
   type DayKey,
   type DayRange,
-} from "@/components/export/fake-export";
+} from "@/components/export/export-data";
 
 // the time period shown on the verbrauch and zählerstand pages, shared by pager, breadcrumb and chart
 

@@ -8,7 +8,7 @@ import { EASE_OUT } from "@/components/motion-provider";
 import { formatDate, formatNumber } from "@/lib/format";
 import { SENSOR_IDS } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import type { ImportSummary as Summary } from "./fake-import";
+import type { ImportSummary as Summary } from "./import-view";
 
 function startOfYear(ts: number): number {
   return Date.UTC(new Date(ts * 1000).getUTCFullYear(), 0, 1) / 1000;

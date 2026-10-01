@@ -52,6 +52,13 @@ const listeners = new Set<() => void>();
 // counts up with every import and reset, an import only writes its result if it is still the latest
 // otherwise a reset during an import would be undone as soon as the import is done
 let latestImport = 0;
+// stops the worker of the running import
+let running: AbortController | null = null;
+
+function stopRunningImport(): void {
+  running?.abort();
+  running = null;
+}
 
 // every change makes a new state object, so react sees that something changed
 function setState(changes: Partial<DataState>): void {
@@ -103,6 +110,8 @@ export async function importFiles(files: File[]): Promise<void> {
     return;
   }
   const id = ++latestImport;
+  const controller = new AbortController();
+  running = controller;
 
   setState({
     status: "importing",
@@ -111,11 +120,18 @@ export async function importFiles(files: File[]): Promise<void> {
   });
 
   try {
-    const result = await startImport(files, (processed, total) => {
-      if (id === latestImport) {
-        setState({ progress: { processed, total } });
-      }
-    });
+    const result = await startImport(
+      files,
+      (processed, total) => {
+        if (id === latestImport) {
+          setState({ progress: { processed, total } });
+        }
+      },
+      controller.signal,
+    );
+    if (running === controller) {
+      running = null;
+    }
     if (id !== latestImport) {
       return;
     }
@@ -130,6 +146,9 @@ export async function importFiles(files: File[]): Promise<void> {
     // replaces what was kept before, the page does not wait for it
     void saveData("data", saved);
   } catch (error) {
+    if (running === controller) {
+      running = null;
+    }
     if (id !== latestImport) {
       return;
     }
@@ -172,12 +191,13 @@ export async function restoreDataStore(): Promise<boolean> {
   return true;
 }
 
-// drops the running import, the data from before stays (same as cancel on the import page)
+// stops the running import, the data from before stays (same as cancel on the import page)
 export function cancelDataImport(): void {
   if (state.status !== "importing") {
     return;
   }
   latestImport++;
+  stopRunningImport();
   setState({ status: state.result ? "ready" : "empty", progress: null });
 }
 
@@ -187,9 +207,10 @@ export function setRange(from: number, to: number): void {
 }
 
 // throws away all data in memory, deleteSavedData (import-store) also empties IndexedDB
-// an import that is still running is dropped, its worker just finishes in the background
+// an import that is still running is stopped
 export function resetDataStore(): void {
   latestImport++;
+  stopRunningImport();
   setState(INITIAL_STATE);
 }
 

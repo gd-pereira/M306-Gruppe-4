@@ -11,7 +11,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { dayKey, formatDay, type DayKey } from "./fake-export";
+import { dayKey, formatDay, type DayKey } from "./export-data";
 
 const MONTHS = [
   "Januar",

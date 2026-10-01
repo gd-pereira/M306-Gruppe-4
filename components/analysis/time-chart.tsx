@@ -18,7 +18,7 @@ import { useElementSize } from "@/components/export/hooks";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { XTick } from "./chart-axes";
-import type { ChartRegion } from "./fake-analysis";
+import type { ChartRegion } from "./analysis-data";
 
 export interface Scale {
   x: (ts: number) => number;

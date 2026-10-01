@@ -8,7 +8,7 @@ import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { requestHead, type RequestTarget } from "./api-request";
 import { useExportSource } from "./export-source";
-import { preview, type ExportSelection, type ExportStats } from "./fake-export";
+import { preview, type ExportSelection, type ExportStats } from "./export-data";
 import { useElementSize } from "./hooks";
 
 // 16.5px line height plus the 4px gap between rows, 12px padding top and bottom

@@ -11,17 +11,10 @@ import {
 } from "@/lib/export";
 import { formatNumber } from "@/lib/format";
 import { zurichToUnix } from "@/lib/time";
-import type { Gap } from "@/lib/timeseries";
-import {
-  SENSOR_IDS,
-  type DataPoint,
-  type Direction,
-  type SensorId,
-} from "@/lib/types";
+import { SENSOR_IDS, type Direction, type SensorId } from "@/lib/types";
 
 // the export screen's helpers: days and ranges for the ui, the file itself comes from lib/export.ts
-// the values come in as an ExportSource: the real meter readings after an import (export-source.ts),
-// before that and for the demo data the made-up curve below with the same numbers as the figma frames
+// the values come in as an ExportSource with the imported meter readings (export-source.ts)
 // no store or react imports here, server components use the day helpers too
 
 // "YYYY-MM-DD", a day in swiss local time
@@ -36,12 +29,6 @@ export const DATA_START: DayKey = "2018-01-01";
 export const DATA_END: DayKey = "2021-09-06";
 // 2018 is calculated backwards from the first esl reading on 01.01.2019
 export const BACKCALC_END: DayKey = "2018-12-31";
-export const GAPS: DayRange[] = [
-  { from: "2020-02-09", to: "2020-02-09" },
-  { from: "2020-06-14", to: "2020-06-15" },
-  { from: "2021-02-18", to: "2021-02-24" },
-  { from: "2021-03-27", to: "2021-03-27" },
-];
 
 export interface SensorInfo {
   id: SensorId;
@@ -165,115 +152,6 @@ export function presetFor(range: DayRange): RangePreset | undefined {
 
 export const INTERVAL = 900;
 
-export interface Grid {
-  start: number;
-  count: number;
-  // 1 where the interval lies in a gap day and has no value
-  gap: Uint8Array;
-}
-
-let grid: Grid | null = null;
-
-export function getGrid(): Grid {
-  if (grid) return grid;
-  const start = dayStart(DATA_START);
-  const count = (dayStart(addDays(DATA_END, 1)) - start) / INTERVAL;
-  const gap = new Uint8Array(count);
-  for (const range of GAPS) {
-    const a = (dayStart(range.from) - start) / INTERVAL;
-    const b = (dayStart(addDays(range.to, 1)) - start) / INTERVAL;
-    gap.fill(1, a, b);
-  }
-  grid = { start, count, gap };
-  return grid;
-}
-
-// deterministic noise in [0, 1)
-function hash(n: number): number {
-  const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-// usage per 15 min in arbitrary units, scaled to the meter totals afterwards
-function consumptionWeight(i: number, hour: number, dayOfYear: number) {
-  const season = 1 + 0.35 * Math.cos((2 * Math.PI * (dayOfYear - 10)) / 365.25);
-  const daily =
-    0.45 +
-    0.55 * Math.exp(-((hour - 7.5) ** 2) / 2) +
-    0.2 * Math.exp(-((hour - 12.5) ** 2) / 3) +
-    0.8 * Math.exp(-((hour - 19) ** 2) / 4);
-  return season * daily * (0.7 + 0.6 * hash(i));
-}
-
-function feedInWeight(i: number, hour: number, dayOfYear: number) {
-  const summer =
-    0.5 + 0.5 * Math.cos((2 * Math.PI * (dayOfYear - 172)) / 365.25);
-  const rise = 8 - 2.8 * summer;
-  const set = 16.5 + 4.5 * summer;
-  if (hour <= rise || hour >= set) return 0;
-  const sun = Math.sin((Math.PI * (hour - rise)) / (set - rise));
-  const cloud = 0.35 + 0.65 * hash(Math.floor(i / 96) * 7.3 + 1);
-  return (0.25 + 0.75 * summer) * cloud * sun * (0.9 + 0.2 * hash(i + 0.5));
-}
-
-const METER = {
-  [SENSOR_IDS.consumption]: {
-    first: 3570.0,
-    last: 54435.3,
-    weight: consumptionWeight,
-  },
-  [SENSOR_IDS.feedIn]: { first: 6435.3, last: 23367.0, weight: feedInWeight },
-} satisfies Record<SensorId, object>;
-
-const readingsCache = new Map<SensorId, Float64Array>();
-
-// meter reading at the end of every 15 min interval
-export function getReadings(sensor: SensorId): Float64Array {
-  const cached = readingsCache.get(sensor);
-  if (cached) return cached;
-  const { start, count } = getGrid();
-  const { first, last, weight } = METER[sensor];
-  const cumulative = new Float64Array(count);
-  let sum = 0;
-  for (let i = 1; i < count; i++) {
-    const ts = start + i * INTERVAL;
-    // local hour without dst is close enough for fake data
-    const hour = (((ts / 3600 + 1) % 24) + 24) % 24;
-    const dayOfYear = Math.floor(i / 96) % 365.25;
-    sum += weight(i, hour, dayOfYear);
-    cumulative[i] = sum;
-  }
-  const scale = (last - first) / sum;
-  for (let i = 0; i < count; i++) cumulative[i] = first + cumulative[i] * scale;
-  readingsCache.set(sensor, cumulative);
-  return cumulative;
-}
-
-// the made-up readings in the same shape as the real ones, one per 15 min, nothing in the gaps
-let fakeSource: ExportSource | null = null;
-
-export function fakeExportSource(): ExportSource {
-  if (fakeSource) return fakeSource;
-  const { start, count, gap } = getGrid();
-  const gaps: Gap[] = GAPS.map((range) => ({
-    start: dayStart(range.from),
-    end: dayStart(addDays(range.to, 1)),
-  }));
-  const source = {} as ExportSource;
-  for (const { id } of SENSORS) {
-    const values = getReadings(id);
-    const readings: DataPoint[] = [];
-    for (let i = 0; i < count; i++) {
-      // a reading belongs to the end of its interval
-      if (!gap[i])
-        readings.push({ ts: start + (i + 1) * INTERVAL, value: values[i] });
-    }
-    source[id] = { sensorId: id, readings, gaps };
-  }
-  fakeSource = source;
-  return source;
-}
-
 // the meter readings of both sensors that the export uses
 export type ExportSource = Record<SensorId, ExportSeries>;
 
@@ -322,7 +200,7 @@ export interface ExportStats {
 
 export function exportStats(
   selection: ExportSelection,
-  source: ExportSource = fakeExportSource(),
+  source: ExportSource,
 ): ExportStats {
   const summary = exportSummary(exportRequest(selection, source));
   return {
@@ -348,7 +226,7 @@ export function formatBytes(bytes: number): string {
 // the whole file, built in chunks so the page stays responsive
 export async function buildFile(
   selection: ExportSelection,
-  source: ExportSource = fakeExportSource(),
+  source: ExportSource,
 ): Promise<Blob> {
   return buildExportFile(exportRequest(selection, source));
 }
@@ -364,7 +242,7 @@ export function preview(
   selection: ExportSelection,
   stats: ExportStats,
   rows: number,
-  source: ExportSource = fakeExportSource(),
+  source: ExportSource,
 ): Preview {
   const request = exportRequest(selection, source);
   if (selection.format === "csv") {
@@ -426,7 +304,7 @@ export interface ChartSeries {
 export function chartSeries(
   selection: ExportSelection,
   samples = 240,
-  source: ExportSource = fakeExportSource(),
+  source: ExportSource,
 ): ChartSeries[] {
   const request = exportRequest(selection, source);
   return request.series.map((series) => {
