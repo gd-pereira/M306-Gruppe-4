@@ -25,9 +25,24 @@ export function ServerUrlField({
   const noteId = `${id}-note`;
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-[13px] font-medium">
-        Server-URL
-      </label>
+      <div className="flex items-center justify-between">
+        <label htmlFor={id} className="text-[13px] font-medium">
+          Server-URL
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            const origin =
+              typeof window !== "undefined"
+                ? window.location.origin
+                : "http://localhost:3000";
+            onChange(`${origin}/api/zaehlerstaende`);
+          }}
+          className="text-xs font-medium text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Demo-Server verwenden
+        </button>
+      </div>
       <input
         id={id}
         type="url"
