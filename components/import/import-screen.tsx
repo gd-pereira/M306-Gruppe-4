@@ -15,7 +15,6 @@ import { DeleteDataDialog } from "./delete-data-dialog";
 import {
   cancelImport,
   deleteSavedData,
-  startDemoImport,
   startImport,
   useImportStore,
 } from "./import-store";
@@ -104,7 +103,6 @@ export function ImportScreen() {
               dragging={dragging}
               onPickFiles={pickers.openFiles}
               onPickFolder={pickers.openFolder}
-              onLoadDemo={() => void startDemoImport()}
             />
           </motion.div>
         ) : (

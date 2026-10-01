@@ -1,8 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { importView } from "@/components/import/import-view";
 import { pageList } from "@/components/import/pagination";
-import { formatDate } from "@/lib/format";
 import { addFile, buildResult, createParsedFiles } from "@/lib/import";
 
 function importFrom(dir: string, names: string[]) {
@@ -75,30 +74,5 @@ describe("importView", () => {
 
   it("gives the same object for the same result", () => {
     expect(importView(result)).toBe(importView(result));
-  });
-});
-
-describe("demo data", () => {
-  const dir = "public/demo";
-  const names: string[] = JSON.parse(
-    readFileSync(`${dir}/files.json`, "utf-8"),
-  );
-
-  it("lists every file in the folder", () => {
-    const xml = readdirSync(dir).filter((name) => name.endsWith(".xml"));
-    expect([...names].sort()).toEqual(xml.sort());
-  });
-
-  it("has january 2021 for both meters, esl readings and ignored files", () => {
-    const result = importFrom(dir, names);
-    const { files, summary } = importView(result);
-    expect(result.errors).toEqual([]);
-    expect(files.filter((f) => f.status === "ignored")).toHaveLength(2);
-    // 31 days with 96 values each
-    expect(summary.values).toEqual({ consumption: 2976, feedIn: 2976 });
-    expect(formatDate(summary.sdat!.start)).toBe("01.01.2021");
-    expect(formatDate(summary.sdat!.end - 1)).toBe("31.01.2021");
-    expect(summary.eslReadings.length).toBeGreaterThanOrEqual(2);
-    expect(result.consumption.meterReading["15min"].length).toBe(2976);
   });
 });

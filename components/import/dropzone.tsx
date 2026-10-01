@@ -67,12 +67,10 @@ export function Dropzone({
   dragging,
   onPickFiles,
   onPickFolder,
-  onLoadDemo,
 }: {
   dragging: boolean;
   onPickFiles: () => void;
   onPickFolder: () => void;
-  onLoadDemo: () => void;
 }) {
   return (
     <>
@@ -144,16 +142,6 @@ export function Dropzone({
               Ordner auswählen
             </Button>
           </div>
-          <p className="pt-2 text-[13px] text-muted-foreground">
-            Keine Dateien zur Hand?{" "}
-            <button
-              type="button"
-              onClick={onLoadDemo}
-              className="rounded-sm font-medium text-primary underline underline-offset-2 transition-colors hover:text-foreground/70 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-            >
-              Demo-Daten laden
-            </button>
-          </p>
         </div>
       </motion.section>
 

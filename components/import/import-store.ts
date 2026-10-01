@@ -9,7 +9,6 @@ import {
 } from "@/lib/data-store";
 import { clearSavedData } from "@/lib/saved-data";
 import { clearOnboarded } from "@/components/app-shell/onboarding";
-import { loadDemoFiles } from "./demo-files";
 import { importView, isXml, type ImportView } from "./import-view";
 
 // what the import page, the dashboard and the sidebar read: the state of lib/data-store with
@@ -27,9 +26,6 @@ export interface ImportState {
 
 export const NO_XML_FAILURE =
   "In der Auswahl wurden keine .xml-Dateien gefunden. Bitte den Ordner mit den SDAT- und ESL-Dateien wählen.";
-
-export const DEMO_FAILURE =
-  "Die Demo-Daten konnten nicht geladen werden. Bitte die Seite neu laden und es nochmals versuchen.";
 
 // what lib/data-store does not know about
 interface LocalState {
@@ -90,15 +86,6 @@ export function startImport(files: File[]): void {
   }
   setLocal({ failure: null });
   void importFiles(xml);
-}
-
-// «Demo-Daten laden»: a small set of real files from public/demo through the same import
-export async function startDemoImport(): Promise<void> {
-  try {
-    startImport(await loadDemoFiles());
-  } catch {
-    setLocal({ failure: DEMO_FAILURE });
-  }
 }
 
 // stops the import and throws away what was read, the data from before stays
