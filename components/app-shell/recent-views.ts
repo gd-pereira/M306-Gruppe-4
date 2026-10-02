@@ -17,7 +17,7 @@ export interface RecentView {
   href: string;
 }
 
-export const RECENT_KEY = "flux.recent";
+const RECENT_KEY = "flux.recent";
 export const MAX_RECENT = 3;
 // short stops while clicking through a drill-down are not worth remembering
 export const RECORD_DELAY_MS = 800;

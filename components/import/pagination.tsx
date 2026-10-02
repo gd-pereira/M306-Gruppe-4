@@ -12,7 +12,7 @@ import { useState } from "react";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export const PAGE_SIZES = [10, 25, 50] as const;
+const PAGE_SIZES = [10, 25, 50] as const;
 export type PageSize = (typeof PAGE_SIZES)[number];
 
 // all pages up to 7, otherwise first, last and the neighbours of the current one

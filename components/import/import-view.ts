@@ -85,7 +85,7 @@ function sum(points: DataPoint[]): number {
   return points.reduce((total, point) => total + point.value, 0);
 }
 
-export function fileRows(result: ImportResult): FileRow[] {
+function fileRows(result: ImportResult): FileRow[] {
   return result.files.map((file, id) => ({
     id,
     name: file.file,

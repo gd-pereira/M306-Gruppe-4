@@ -283,7 +283,7 @@ export function formatWeekday(day: DayKey): string {
 }
 
 // 01.2018 – 08.2021
-export function formatMonthRange({ from, to }: DayRange): string {
+function formatMonthRange({ from, to }: DayRange): string {
   const [fy, fm] = from.split("-");
   const [ty, tm] = to.split("-");
   return `${fm}.${fy} – ${tm}.${ty}`;
