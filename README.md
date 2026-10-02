@@ -78,7 +78,6 @@ The test server `app/api/zaehlerstaende` needs the same session: without it `POS
 | `npm run lint`         | Check the code with ESLint              |
 | `npm run format`       | Format all files with Prettier          |
 | `npm run format:check` | Check formatting without changing files |
-| `npm run slides`       | Build `praesentation.pptx`              |
 
 ## Project structure
 
@@ -118,7 +117,6 @@ lib/
   saved-data.ts          keeps the last import in IndexedDB
   export.ts              CSV and JSON files of the meter readings
 public/brand/            logo files
-scripts/                 presentation (npm run slides) and its screenshots
 tests/
   *.test.ts              Vitest tests
   fake-data.ts           made-up readings for the chart and export helper tests
@@ -126,8 +124,6 @@ tests/
 data/
   sdat/                  5133 SDAT files (sample data from the client)
   esl/                   47 ESL files (sample data from the client)
-docs/
-  Projektbeschreibung.pdf, Bewertungskriterien.pdf, sdat-spec/
 ```
 
 ## Input data
@@ -350,10 +346,3 @@ In code, use `FluxLogo` or `FluxMark` from `components/brand/flux-logo.tsx`. Arr
 - Ink `#171717`, or white on dark backgrounds, used for consumption in charts
 - Red `#F04438` for incomplete months and errors
 - Wordmark: Montserrat ExtraBold, already converted to paths in the SVGs
-
-## Documentation
-
-- `docs/Projektbeschreibung.pdf`: project description from the client
-- `docs/Praesentation_Sprechernotizen.md`: speaker notes for the presentation
-- `docs/Bewertungskriterien.pdf`: grading criteria
-- `docs/sdat-spec/`: SDAT standard (Swiss standardised data exchange) with appendices and example files.
