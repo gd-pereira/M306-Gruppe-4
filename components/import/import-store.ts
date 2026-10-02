@@ -24,7 +24,7 @@ export interface ImportState {
   restoring: boolean;
 }
 
-export const NO_XML_FAILURE =
+const NO_XML_FAILURE =
   "In der Auswahl wurden keine .xml-Dateien gefunden. Bitte den Ordner mit den SDAT- und ESL-Dateien wählen.";
 
 // what lib/data-store does not know about

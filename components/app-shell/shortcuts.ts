@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { NAV_ITEMS, type NavItem } from "./nav";
 
 // how long after "G" the second key still counts
-export const SEQUENCE_MS = 1000;
+const SEQUENCE_MS = 1000;
 
 interface KeyLike {
   key: string;

@@ -21,7 +21,7 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
-export function dismissToast(id: number) {
+function dismissToast(id: number) {
   toasts = toasts.filter((item) => item.id !== id);
   emit();
 }
